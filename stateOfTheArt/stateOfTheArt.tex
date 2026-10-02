@@ -1,0 +1,78 @@
+% !TeX root = ../main.tex
+\chapter{State of the Art}
+
+\section{Taxonomy of Deep Anomaly Detection Paradigms}
+
+To build a solid theoretical groundwork for real-time telemetry analytics in autonomous mobile robotics, this section examines the comprehensive taxonomy of deep anomaly detection formulated by Pang et al. \cite{pang2021deep}. As depicted in Figure~\ref{fig:anomaly-detection-taxonomy}, algorithmic approaches in deep learning are structured into three main modeling paradigms based on the formulation of feature representation learning and its coupling with the anomaly scoring objective \cite{pang2021deep}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.90\linewidth]{anomalyDetectionTaxonomyACMComputingSurvey.png}
+  \caption{Taxonomy of deep anomaly detection techniques categorized by feature representation learning and objective function formulation \cite{pang2021deep}.}
+  \label{fig:anomaly-detection-taxonomy}
+\end{figure}
+
+\subsection{Categorization of Algorithmic Methodologies}
+
+\begin{enumerate}
+    \item \textbf{Deep Learning for Feature Extraction:} This two-stage framework employs a pre-trained deep neural network strictly as a static feature transformation layer, projecting high-dimensional raw inputs $\mathbf{x} \in \mathbb{R}^D$ into a lower-dimensional latent representation $\mathbf{z} \in \mathbb{R}^d$. Conventional shallow anomaly detectors, such as Isolation Forests ($i$Forest) or Local Outlier Factor (LOF), are subsequently applied to the extracted features. While computationally convenient, this decoupled methodology exhibits a major theoretical drawback: the feature extraction architecture is trained independently of the anomaly scoring criterion, potentially discarding subtle non-linear signals critical for fault detection \cite{pang2021deep}.
+    
+    \item \textbf{Learning Feature Representations of Normality:} Rather than relying on task-agnostic representations, this paradigm constructs custom feature spaces explicitly optimized to model the structural properties of nominal system operation \cite{pang2021deep}. Based on the underlying optimization objective, it is divided into two major sub-categories:
+    \begin{itemize}
+        \item \textit{Generic Normality Feature Learning:} This approach leverages self-supervised or generative surrogate tasks to learn latent data representations under nominal conditions \cite{pang2021deep}. Key examples include \textbf{Autoencoders (AE)} and \textbf{Generative Adversarial Networks (GANs)}. Autoencoders impose an information bottleneck that compresses input streams into a constrained latent space and subsequently reconstructs them. Observations yielding reconstruction residuals above a dynamic statistical threshold are flagged as anomalous \cite{pang2021deep, blazquez2021review}.
+        \item \textit{Anomaly Measure-Dependent Feature Learning:} This framework optimizes feature representations directly within dedicated geometric or metric spaces \cite{pang2021deep}. A representative architecture is \textbf{Deep One-Class Classification (Deep SVDD)} \cite{ruff2018deep}, which trains a neural network to map nominal data points inside a minimal-volume hypersphere in feature space, penalizing observations mapped beyond this boundary \cite{ruff2018deep}.
+    \end{itemize}
+    
+    \item \textbf{End-to-End Anomaly Score Learning:} This unified paradigm eliminates intermediate representation steps by directly training custom neural architectures to output continuous anomaly scores in an end-to-end backpropagation process, employing specialized ranking loss functions or prior-driven distribution matching metrics \cite{pang2021deep}.
+\end{enumerate}
+
+\subsection{Methodological Selection and Alignment with AGV Telemetry Constraints}
+
+Evaluating this taxonomy against the operational requirements of AGV and AMR telemetry processing provides a clear rationale for algorithm selection in this project:
+
+\begin{itemize}
+    \item \textbf{Multivariate High-Dimensional Temporal Coupling:} Industrial telemetry emitted by mobile fleets comprises multiple synchronized time series (e.g., motor current, motor voltage, motor temperature, linear velocity, and battery state) exhibiting complex non-linear spatial-temporal correlations \cite{benecki2024agv, blazquez2021review}. \textit{Generic Normality Feature Learning}, specifically \textbf{Recurrent Autoencoder architectures (GRU-AE / LSTM-AE)}, excels at capturing these latent temporal dependencies while addressing high dimensionality and low anomaly recall rates \cite{pang2021deep, blazquez2021review}.
+    
+    \item \textbf{Low-Latency Ingestion in Medallion Architecture:} Deploying real-time anomaly detection within a time-series Data Lakehouse demands deterministic inference performance \cite{benecki2024agv, paleyes2022challenges}. Recurrent Autoencoders exhibit a linear computational complexity $\mathcal{O}(T)$ per time window, enabling low-latency execution in the continuous stream processing pipeline (Silver layer) before pushing structured alerts to the observation system.
+    
+    \item \textbf{Granular Root-Cause Explainability:} By decomposing the total reconstruction residual $\|\mathbf{X} - \hat{\mathbf{X}}\|^2$ along individual telemetry channels, generic reconstruction models provide explicit variable-level attribution, transforming abstract anomaly scores into interpretable diagnostic data for maintenance technicians \cite{pang2021deep}.
+\end{itemize}
+
+Consequently, this work adopts a \textbf{Gated Recurrent Unit Autoencoder (GRU-AE) with reconstruction residual decomposition} as the core analytical engine for real-time AGV fleet monitoring.
+
+//Revisar
+\section{Scalable Real-Time Telemetry Pipelines and Data Lakehouse Architecture}
+
+Processing high-frequency telemetry streams generated by autonomous mobile fleets poses severe data engineering challenges regarding ingestion throughput, low-latency transformations, and transactional persistence \cite{mohna2024medallion}. Traditional data warehouse architectures struggle with the velocity and semi-structured nature of IoT payloads, whereas raw data lakes lack transactional guarantees, resulting in data corruption and poor query performance \cite{okolnychyi2024iceberg}. This section examines the architectural paradigms required to ingest, refine, and query massive AGV telemetry streams for real-time inference and historical analytics.
+
+\subsection{Real-Time Stream Ingestion and Decoupled Messaging Layer}
+
+To manage the continuous telemetry stream emitted by industrial AGVs, modern cyber-physical infrastructures decouple data ingestion from analytical processing using event-driven broker architectures \cite{vda5050}. Protocols such as VDA 5050 standardize state and order exchanges via Lightweight Message Queuing Telemetry Transport (MQTT) over wireless networks \cite{vda5050, franke2023vda}. However, extending telemetry to include continuous physical health metric, such as motor current, thermal dynamics, and battery degradatio, demands high-throughput streaming layers capable of handling backpressure and bursty traffic \cite{franke2023vda}.
+
+Distributed stream-processing engines (e.g., Apache Spark Structured Streaming) ingest raw MQTT payloads, execute schema validation, append ingestion metadata, and cleanse malformed records in near real-time. The cleansed stream is published to high-performance event brokers (e.g., Redpanda / Apache Kafka), establishing a publish-subscribe boundary that isolates edge telemetry generation from downstream machine learning consumers and storage engines.
+
+\subsection{The Data Lakehouse Paradigm and Medallion Storage Model}
+
+To provide structured, highly performant access to historical telemetry without incurring the costs of proprietary data warehouses, the system adopts a \textbf{Data Lakehouse} paradigm \cite{mohna2024medallion}. This hybrid model superimposes DBMS-like ACID transactions, schema enforcement, and versioning over low-cost object repositories (S3-compatible storage) \cite{mohna2024medallion, okolnychyi2024iceberg}.
+
+Data persistence is structured according to the \textbf{Medallion Architecture}, which organizes data into progressive refinement tiers \cite{mohna2024medallion}:
+
+\begin{enumerate}
+    \item \textbf{Bronze Layer (Raw Telemetry Ingestion):} Acts as an append-only, immutable landing zone. Incoming raw JSON payloads from the broker layer are persisted in their original format to preserve an auditable lineage of historic signals \cite{mohna2024medallion}.
+    \item \textbf{Silver Layer (Cleaned and Enriched Data):} Stores validated, deduplicated, and schema-enforced events. Signals are converted into columnar formats (e.g., Apache Parquet) managed by open table formats like \textbf{Apache Iceberg} \cite{okolnychyi2024iceberg}. This layer serves as the primary feature source for downstream deep learning models (e.g., GRU-Autoencoders) \cite{mohna2024medallion}.
+    \item \textbf{Gold Layer (Business Aggregations and Diagnostic Outputs):} Holds aggregated operational metrics, statistical summaries, and model outputs, such as reconstruction error scores and mapped diagnostic fault labels, enabling performant analytical queries \cite{mohna2024medallion}.
+\end{enumerate}
+
+\subsection{Transactional Consistency and Partition Evolution with Apache Iceberg}
+
+Implementing the Medallion architecture on object storage requires robust table formats to prevent query inconsistency during concurrent stream writes \cite{okolnychyi2024iceberg}. \textbf{Apache Iceberg} introduces a hierarchical metadata tree that enables:
+
+\begin{itemize}
+    \item \textbf{ACID Transactions and Snapshot Isolation:} Readers query isolated table snapshots while continuous stream writers commit new data files concurrently, eliminating read locks and partial query reads \cite{okolnychyi2024iceberg}.
+    \item \textbf{Partition Evolution and Hidden Partitioning:} Telemetry tables can evolve their partitioning scheme (e.g., transitioning from hourly buckets to hybrid vehicle-ID partitioning) without requiring full historical table rewrites or altering user queries \cite{icebergIncremental2026}.
+    \item \textbf{Row-Level Operations via Delete Files:} Iceberg manages updates and deletions efficiently through position and equality delete files, avoiding the small-file problem during high-frequency ingestion \cite{okolnychyi2024iceberg}.
+\end{itemize}
+
+\subsection{High-Performance Time-Series Persistence and Visualization}
+
+While Data Lakehouses provide cost-effective long-term persistence and batch analytics, operational decision-making demands sub-second latency for live dashboarding and alerting \cite{mohna2024medallion}. Consequently, live predictions and decomposed anomaly scores are mirrored into high-performance time-series databases (e.g., QuestDB). Optimized for column-oriented time-series indexing, QuestDB enables real-time SQL querying for operational dashboards (e.g., Grafana), completing the pipeline from continuous stream ingestion to human-interpretable predictive maintenance alerts.

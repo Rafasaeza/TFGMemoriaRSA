@@ -1,0 +1,72 @@
+% !TeX root = ../main.tex
+\chapter{Introduction}
+\label{chap:introduction}
+
+\section{Motivation}
+Industry 4.0 is no longer just a concept, but a reality transforming factories worldwide. 
+The arrival of these emerging technologies opens up vast opportunities to optimize production processe, shifting the focus from mere automation toward creating truly intelligent factories.\\
+
+A key enabler of Industry 4.0 is the deployment of Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs), which are capable of navigating autonomously through factories, warehouses, and complex environments. 
+Their adoption across industries continues to surge, with market research pointing to sustained, strong growth in the coming years \cite{imarc2026agv}.\\
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=.85\linewidth]{marquetForecastAgv.png}
+  \caption{Global AGV market forecast (2025--2034). Source: IMARC Group~\cite{imarc2026agv}.}
+  \label{fig:agv-market-forecast}
+\end{figure}
+
+Because these vehicles play a vital role in production, any failure can paralyze the assembly line, resulting in substantial financial losses. 
+Studies reveal that unexpected downtime can range from \$36,000 per hour in fast-moving consumer goods to upwards of \$2.3 million per hour in the automotive sector \cite{siemens2024Cost}. 
+Consequently, preventing such disruptions is not merely an operational challenge, but a critical financial priority for modern manufacturers.\\
+
+A promising solution to this challenge is predictive maintenance, which can significantly reduce vehicle failures and the associated costs of unplanned downtime. 
+The literature on machine learning for anomaly detection is extensive, however, a significant gap remains between theoretical studies and real-world implementation, as researchers encounter major hurdles when scaling proposed solutions to production environments \cite{paleyes2022challenges}.
+Through a review of this literature, four key limitations emerge as critical factors when developing a real-time anomaly detection system for AGVs and AMRs \cite{benecki2024agv}:
+\begin{itemize}
+    \item \textbf{High-volume data management and processing:} Managing and automatically processing vast amounts of data, ensuring not only scale handling but also the quality and relevance of the ingested information.
+    \item \textbf{Dynamism of industrial environments:} The inherently dynamic nature of manufacturing settings requires continuous adaptation to shifting conditions and novel anomaly types.
+    \item \textbf{Ambiguity of anomalies:} The challenge of accurately classifying anomalies to establish a robust mapping between newly detected anomalies and known failure modes.
+    \item \textbf{Real-time integration of machine learning models:} Deploying machine learning inference within real-time environments to enable immediate anomaly detection and automated response.
+\end{itemize}
+
+To complement the core challenges identified in the literature, an additional constraint must be considered in this work: the total lack of labeled historical error data, which precludes the use of supervised learning approaches.\\
+
+\section{Objectives}
+As demonstrated in the previous section, AGVs and AMRs are fully integrated into Industry 4.0 processes. While they drive automation across the production line, their critical role implies that any asset failure can lead to a complete halt in production. Furthermore, although numerous studies validate the effectiveness of machine learning for anomaly detection, translating these approaches into real-world production environments presents significant technical limitations.\\
+
+To address these challenges, this project aims to design and implement a fully decoupled, end-to-end architecture for real-time anomaly detection. Broadly speaking, the proposed pipeline encompasses the entire data lifecycle: from simulated AGV telemetry generation, real-time data ingestion, processing, and persistence, to unsupervised machine learning anomaly detection and interactive visualization of diagnostic metrics.\\
+
+To achieve this overarching goal, the project is structured into five specific technical objectives:
+\begin{enumerate}
+    \item \textbf{Adaptation of the VDA 5050\cite{vda5050standard} Simulator\cite{bostanciVda5050}:} 
+    Due to hardware constraints and limited access to physical AGVs, utilizing real industrial data is often unfeasible. Therefore, a Rust-based VDA 5050 simulator is to be adapted to generate realistic telemetry streams. The simulation is extended beyond pure protocol compliance to model real-world robot physics and key health metrics, including motor current, motor voltage, motor temperature, linear velocity, and battery state. Generative AI tool(Claude Sonnet 3.5) is to be leveraged to assist in extending the Rust codebase.
+
+    \item \textbf{Real-Time Data Pipeline Implementation:} 
+    To process raw telemetry streams before they reach downstream machine learning components, Apache Spark is used to ingest raw streams, cleanse null fields, append ingestion timestamps, and standardize data structures. Cleaned events are to be published to a Redpanda event broker. This Kafka-compatible streaming layer decouples system modules, allowing independent producers and consumers to interact seamlessly.
+
+    \item \textbf{Data Lakehouse and Medallion Architecture\cite{dey2026lakehouse}:} 
+    To ensure scalable, long-term persistence, a Data Lakehouse paradigm is adopted. It combines the cost-effective storage of object repositories (S3-compatible bucket) with the structured, ACID-compliant query capabilities of Apache Iceberg. Data is to be organized following a Medallion Architecture:
+    \begin{itemize}
+        \item \textbf{Bronze Layer:} To store raw, unprocessed telemetry streams exactly as received.
+        \item \textbf{Silver Layer:} To contain cleaned, validated, and enriched data with added ingestion metadata.
+        \item \textbf{Gold Layer:} To hold business-level aggregations, detected anomalies, and analytical outputs.
+    \end{itemize}
+
+    \item \textbf{Deep Learning for Anomaly Detection:} 
+    Serving as the core analytical engine, this component focuses on unsupervised anomaly detection using deep learning frameworks (PyTorch). Following a review of current methodologies, a deep learning model (e.g., Autoencoder) is to be deployed to detect subtle telemetry deviations. Furthermore, the objective extends beyond raw mathematical score calculation to map detected anomalies to clear, non-ambiguous diagnostic labels for human interpretability.
+
+    \item \textbf{Visualization and Monitoring Layer:} 
+    To present actionable insights to operational staff, telemetry and anomaly scores are to be persisted in QuestDB—a high-performance time-series database. Grafana dashboards then query QuestDB to display real-time metrics, system health status, and historical anomaly alerts.
+\end{enumerate}
+
+This multi-layered approach not only supports live monitoring, but through the Medallion Architecture and Iceberg time-travel capabilities, it allows historical raw data (Bronze layer) to be reprocessed whenever model architectures or machine learning requirements evolve.
+
+\subsection{Industrial Context and Collaboration}
+This project is carried out in collaboration with EDAG Engineering Group. As an international engineering service provider for the automotive and manufacturing industries, EDAG actively develops cutting-edge Industry 4.0 solutions. Developing this project during an internship at EDAG provides direct insight into real-world industrial environments, system requirements, and deployment constraints. Specifically, this work contributes to the \textbf{Metys} project \cite{edagMetys}, an initiative aimed at optimizing software development and smart production workflows.
+
+\section{Scope and Limitations}
+To be done\dots
+
+\section{Document structure}
+To be done\dots

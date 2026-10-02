@@ -1,0 +1,19 @@
+\contentsline {chapter}{Resumen}{1}{chapter*.1}%
+\contentsline {chapter}{Abstract}{2}{chapter*.2}%
+\contentsline {chapter}{Agradecimientos}{3}{chapter*.4}%
+\contentsline {chapter}{\numberline {1}Introduction}{7}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Motivation}{7}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Objectives}{8}{section.1.2}%
+\contentsline {subsection}{\numberline {1.2.1}Industrial Context and Collaboration}{9}{subsection.1.2.1}%
+\contentsline {section}{\numberline {1.3}Scope and Limitations}{9}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Document structure}{10}{section.1.4}%
+\contentsline {chapter}{\numberline {2}State of the Art}{11}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Taxonomy of Deep Anomaly Detection Paradigms}{11}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Categorization of Algorithmic Methodologies}{12}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Methodological Selection and Alignment with AGV Telemetry Constraints}{12}{subsection.2.1.2}%
+\contentsline {section}{\numberline {2.2}Scalable Real-Time Telemetry Pipelines and Data Lakehouse Architecture}{13}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Real-Time Stream Ingestion and Decoupled Messaging Layer}{13}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}The Data Lakehouse Paradigm and Medallion Storage Model}{13}{subsection.2.2.2}%
+\contentsline {subsection}{\numberline {2.2.3}Transactional Consistency and Partition Evolution with Apache Iceberg}{14}{subsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.2.4}High-Performance Time-Series Persistence and Visualization}{14}{subsection.2.2.4}%
+\contentsline {chapter}{Bibliography}{15}{chapter*.7}%

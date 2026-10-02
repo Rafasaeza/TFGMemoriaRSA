@@ -1,0 +1,110 @@
+% !TeX program = xelatex
+\documentclass{report}
+
+%───────── Plantilla, portadas y contraportada ─────────────────────────
+\usepackage{template/sty_files/template-TFGenglish-uma}
+
+\usepackage{template/sty_files/cotutor_cover-blueuma}
+\usepackage{template/sty_files/cotutor_cover-whiteuma}
+
+\usepackage{template/sty_files/plain_cover-blueuma}
+\usepackage{template/sty_files/plain_cover-whiteuma}
+
+\usepackage{template/sty_files/backcover-uma}
+
+%───────── Paquetes auxiliares ─────────────────────────────────────────
+\usepackage{blindtext}
+\usepackage{amssymb}       % \mathbb, \mathcal...
+\usepackage{mwe}               % imágenes de prueba
+\usepackage{csquotes}
+\usepackage[
+  backend=biber,
+  style=numeric,
+  sorting=nyt,
+  maxbibnames=10,
+  giveninits=true
+]{biblatex}
+\addbibresource{references.bib}
+
+\graphicspath{{figures/}}
+
+%======================================================================
+\begin{document}
+
+\frontmatter
+%────────────────────── Blue front cover ───────────────────────────────
+\MakeBlueUMACover{
+  degree     = {Grado en Ingeniería Informática},
+  mencion    = {Ingeniería del Software},
+  titleES    = {Detección de anomalías en robots industriales y activos móviles (AGV/AMR) mediante Machine 
+Learning para Mantenimiento Predictivo. },
+  titleEN    = {Anomaly Detection in Industrial Mobile Assets (AGV/AMR) using Machine Learning for Predictive 
+Maintenance },
+  author     = {Rafael Sáez Arana},
+  tutor      = {Cristian Martin Fernández},
+  cotutor    = {Bartolomé Rubio Muñoz},
+  dept       = {Departamento de Lenguajes y Ciencias de la Computación},
+  cityDate   = {Málaga, \today},
+  logoLeft   = {template/logos/NEG-uma-logo.png},
+  logoRight  = {template/logos/NEG-etsi-logo.png}
+}
+
+%────────────────────── White front cover ──────────────────────────────
+\MakeWhiteUMACover{
+  degree      = {Grado en Ingeniería Informática},
+  mencion     = {Ingeniería del Software},
+  titleES     = {Detección de anomalías en robots industriales y activos móviles (AGV/AMR) mediante Machine 
+Learning para Mantenimiento Predictivo. },
+  titleEN     = {Anomaly Detection in Industrial Mobile Assets (AGV/AMR) using Machine Learning for Predictive 
+Maintenance },
+  author      = {Rafael Sáez Arana},
+  tutor       = {Cristian Martin Fernández},
+  cotutor     = {Bartolomé Rubio Muñoz},
+  dept        = {Departamento de Lenguajes y Ciencias de la Computación},
+  cityDate    = {MÁLAGA, \today},
+  defenseDate = {septiembre de 2025},
+  logoLeft    = {template/logos/POS-uma-logo.png},
+  logoRight   = {template/logos/POS-etsi-logo.png}
+}
+
+%────────────────────── Resumen / Abstract ─────────────────────────────
+\input{abstract/resumen}
+\input{abstract/abstract}
+
+%──────────────── Agradecimientos ──────────────────────────────────────
+% Sección opcional, si no se quiere usar, borrar el entorno umaacknowledgments
+
+% Descomentar si los vas a escribir en inglés
+% \SetAcknowledgmentsName{Acknowledgments} 
+\begin{umaacknowledgments}
+
+\end{umaacknowledgments}
+
+%────────────────────── Índice y listas ────────────────────────────────
+\cleardoublepage
+\tableofcontents
+\cleardoublepage
+\listoffigures
+\cleardoublepage
+\listoftables
+\cleardoublepage
+
+%────────────────────── Nomenclatura ───────────────────────────────────
+\nomenclature{}{}
+\printnomenclature
+\cleardoublepage
+
+\mainmatter
+%────────────────────── Cuerpo ─────────────────────────────────────────
+% https://en.wikipedia.org/wiki/Standing_on_the_shoulders_of_giants 
+\input{introduction/introduction}
+\input{stateOfTheArt/stateOfTheArt}
+
+
+%────────────────────── Contraportada ──────────────────────────────────
+\backmatter
+\printbibliography[title={Bibliography}, heading=bibintoc]
+\cleardoublepage
+\MakeUMABackCover
+\end{document}
+% ======================================================================

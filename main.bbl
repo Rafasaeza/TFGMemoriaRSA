@@ -1,0 +1,473 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.3 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{nyt/global//global/global/global}
+    \entry{benecki2024agv}{incollection}{}{}
+      \name{author}{5}{}{%
+        {{hash=0c07d9659935087d9f0ab5493680244a}{%
+           family={Benecki},
+           familyi={B\bibinitperiod},
+           given={Pawe{ł}},
+           giveni={P\bibinitperiod}}}%
+        {{hash=1c6a6043aaa19f2eee414eaf496d243d}{%
+           family={Kaczmarek},
+           familyi={K\bibinitperiod},
+           given={Piotr},
+           giveni={P\bibinitperiod}}}%
+        {{hash=726e8027f2cb5c734f44b9dd5d1d842b}{%
+           family={Kujawa},
+           familyi={K\bibinitperiod},
+           given={Micha{ł}},
+           giveni={M\bibinitperiod}}}%
+        {{hash=2c2941ea2e691e9189180eb17274afa9}{%
+           family={Rynkiewicz},
+           familyi={R\bibinitperiod},
+           given={Andrzej},
+           giveni={A\bibinitperiod}}}%
+        {{hash=fd9af53dcaabbf7141fc9222bdcfa2ff}{%
+           family={Maj},
+           familyi={M\bibinitperiod},
+           given={Mateusz},
+           giveni={M\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {Springer, Cham}%
+      }
+      \strng{namehash}{f3bf4cdcad4e97f8ccb7596018a6202a}
+      \strng{fullhash}{927b39750b92add0f423754809edb933}
+      \strng{fullhashraw}{927b39750b92add0f423754809edb933}
+      \strng{bibnamehash}{927b39750b92add0f423754809edb933}
+      \strng{authorbibnamehash}{927b39750b92add0f423754809edb933}
+      \strng{authornamehash}{f3bf4cdcad4e97f8ccb7596018a6202a}
+      \strng{authorfullhash}{927b39750b92add0f423754809edb933}
+      \strng{authorfullhashraw}{927b39750b92add0f423754809edb933}
+      \field{sortinit}{B}
+      \field{sortinithash}{d7095fff47cda75ca2589920aae98399}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Computational Science -- ICCS 2024}
+      \field{series}{Lecture Notes in Computer Science}
+      \field{title}{Towards Detection of Anomalies in Automated Guided Vehicles Based on Telemetry Data}
+      \field{volume}{14833}
+      \field{year}{2024}
+      \field{pages}{124\bibrangedash 138}
+      \range{pages}{15}
+      \verb{doi}
+      \verb 10.1007/978-3-031-63749-0_10
+      \endverb
+    \endentry
+    \entry{blazquez2021review}{article}{}{}
+      \name{author}{4}{}{%
+        {{hash=f207d0236e3f2f9cbef55bce12df62f7}{%
+           family={Blázquez-García},
+           familyi={B\bibinithyphendelim G\bibinitperiod},
+           given={Ane},
+           giveni={A\bibinitperiod}}}%
+        {{hash=60ac96bf1250811e9c25c6470685530f}{%
+           family={Conde},
+           familyi={C\bibinitperiod},
+           given={Angel},
+           giveni={A\bibinitperiod}}}%
+        {{hash=656e6870b8a84870859707b88f0058c1}{%
+           family={Mori},
+           familyi={M\bibinitperiod},
+           given={Usman},
+           giveni={U\bibinitperiod}}}%
+        {{hash=e74af45a9aa9f5d51dcc16745de85135}{%
+           family={Lozano},
+           familyi={L\bibinitperiod},
+           given={Jose\bibnamedelima A.},
+           giveni={J\bibinitperiod\bibinitdelim A\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {ACM New York, NY, USA}%
+      }
+      \strng{namehash}{67acaf80fc39d6fca4ddc7b2b9deb34b}
+      \strng{fullhash}{9d533efaa2e6ce0d9c94591328af5aa7}
+      \strng{fullhashraw}{9d533efaa2e6ce0d9c94591328af5aa7}
+      \strng{bibnamehash}{9d533efaa2e6ce0d9c94591328af5aa7}
+      \strng{authorbibnamehash}{9d533efaa2e6ce0d9c94591328af5aa7}
+      \strng{authornamehash}{67acaf80fc39d6fca4ddc7b2b9deb34b}
+      \strng{authorfullhash}{9d533efaa2e6ce0d9c94591328af5aa7}
+      \strng{authorfullhashraw}{9d533efaa2e6ce0d9c94591328af5aa7}
+      \field{sortinit}{B}
+      \field{sortinithash}{d7095fff47cda75ca2589920aae98399}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{ACM Computing Surveys}
+      \field{number}{3}
+      \field{title}{A Review on Outlier/Anomaly Detection in Time Series Data}
+      \field{volume}{54}
+      \field{year}{2021}
+      \field{pages}{56:1\bibrangedash 56:33}
+      \range{pages}{-1}
+      \verb{doi}
+      \verb 10.1145/3444690
+      \endverb
+    \endentry
+    \entry{bostanciVda5050}{online}{}{}
+      \name{author}{1}{}{%
+        {{hash=9c10680462dcbf61a85baf831f247ba8}{%
+           family={Bostanc{ı}},
+           familyi={B\bibinitperiod},
+           given={Bekir},
+           giveni={B\bibinitperiod}}}%
+      }
+      \strng{namehash}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{fullhash}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{fullhashraw}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{bibnamehash}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{authorbibnamehash}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{authornamehash}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{authorfullhash}{9c10680462dcbf61a85baf831f247ba8}
+      \strng{authorfullhashraw}{9c10680462dcbf61a85baf831f247ba8}
+      \field{sortinit}{B}
+      \field{sortinithash}{d7095fff47cda75ca2589920aae98399}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{vda5050\_vehicle\_simulator: High Performance VDA5050 Simulator}
+      \field{urlday}{29}
+      \field{urlmonth}{9}
+      \field{urlyear}{2026}
+      \field{year}{2024}
+      \field{urldateera}{ce}
+      \verb{urlraw}
+      \verb https://github.com/bekirbostanci/vda5050_vehicle_simulator
+      \endverb
+      \verb{url}
+      \verb https://github.com/bekirbostanci/vda5050_vehicle_simulator
+      \endverb
+    \endentry
+    \entry{dey2026lakehouse}{article}{}{}
+      \name{author}{1}{}{%
+        {{hash=3f1d2ef3bed1fb0c16f4fb74424bf64c}{%
+           family={Dey},
+           familyi={D\bibinitperiod},
+           given={Ananda\bibnamedelima Kumar},
+           giveni={A\bibinitperiod\bibinitdelim K\bibinitperiod}}}%
+      }
+      \strng{namehash}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{fullhash}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{fullhashraw}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{bibnamehash}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{authorbibnamehash}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{authornamehash}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{authorfullhash}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \strng{authorfullhashraw}{3f1d2ef3bed1fb0c16f4fb74424bf64c}
+      \field{sortinit}{D}
+      \field{sortinithash}{6f385f66841fb5e82009dc833c761848}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{International Journal of Artificial Intelligence and Machine Learning}
+      \field{number}{4s}
+      \field{title}{Intelligent Lakehouse Architectures for Real-Time Enterprise Decision Systems}
+      \field{volume}{6}
+      \field{year}{2026}
+      \field{pages}{226\bibrangedash 236}
+      \range{pages}{11}
+      \verb{doi}
+      \verb 10.51483/IJAIML.6.4s.2026.226-236
+      \endverb
+    \endentry
+    \entry{edagMetys}{online}{}{}
+      \name{author}{1}{}{%
+        {{hash=a9c4c4e3cb038692ff0905713cff4ef9}{%
+           family={{EDAG}},
+           familyi={E\bibinitperiod}}}%
+      }
+      \strng{namehash}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{fullhash}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{fullhashraw}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{bibnamehash}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{authorbibnamehash}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{authornamehash}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{authorfullhash}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \strng{authorfullhashraw}{a9c4c4e3cb038692ff0905713cff4ef9}
+      \field{sortinit}{E}
+      \field{sortinithash}{8da8a182d344d5b9047633dfc0cc9131}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Metys: The Industrial Metaverse Platform for Industry}
+      \field{year}{2026}
+      \verb{urlraw}
+      \verb https://www.edag.com/en/solutions/metys
+      \endverb
+      \verb{url}
+      \verb https://www.edag.com/en/solutions/metys
+      \endverb
+    \endentry
+    \entry{imarc2026agv}{report}{}{}
+      \name{author}{1}{}{%
+        {{hash=dcda9724384df9e1b760b6a4138e2be2}{%
+           family={{IMARC Group}},
+           familyi={I\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {IMARC Services Private Limited}%
+      }
+      \strng{namehash}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{fullhash}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{fullhashraw}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{bibnamehash}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{authorbibnamehash}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{authornamehash}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{authorfullhash}{dcda9724384df9e1b760b6a4138e2be2}
+      \strng{authorfullhashraw}{dcda9724384df9e1b760b6a4138e2be2}
+      \field{sortinit}{I}
+      \field{sortinithash}{8d291c51ee89b6cd86bf5379f0b151d8}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{Automated Guided Vehicles Market: Global Industry Trends, Share, Size, Growth, Opportunity and Forecast 2025-2034}
+      \field{type}{techreport}
+      \field{year}{2026}
+      \verb{urlraw}
+      \verb https://www.imarcgroup.com/automated-guided-vehicles-market
+      \endverb
+      \verb{url}
+      \verb https://www.imarcgroup.com/automated-guided-vehicles-market
+      \endverb
+    \endentry
+    \entry{paleyes2022challenges}{article}{}{}
+      \name{author}{3}{}{%
+        {{hash=965a5c0abc65962166bbfe7e3e15d40d}{%
+           family={Paleyes},
+           familyi={P\bibinitperiod},
+           given={Andrei},
+           giveni={A\bibinitperiod}}}%
+        {{hash=ce97d05f0855e040ff43d51cd685711e}{%
+           family={Urma},
+           familyi={U\bibinitperiod},
+           given={Raoul-Gabriel},
+           giveni={R\bibinithyphendelim G\bibinitperiod}}}%
+        {{hash=f83d1b861ef00c2c1e490eb5f7360434}{%
+           family={Lawrence},
+           familyi={L\bibinitperiod},
+           given={Neil\bibnamedelima D.},
+           giveni={N\bibinitperiod\bibinitdelim D\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {ACM New York, NY, USA}%
+      }
+      \strng{namehash}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{fullhash}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{fullhashraw}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{bibnamehash}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{authorbibnamehash}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{authornamehash}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{authorfullhash}{3e1bdc89683231b3e05eb0657150ec7e}
+      \strng{authorfullhashraw}{3e1bdc89683231b3e05eb0657150ec7e}
+      \field{sortinit}{P}
+      \field{sortinithash}{ff3bcf24f47321b42cb156c2cc8a8422}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{ACM Computing Surveys}
+      \field{number}{6}
+      \field{title}{Challenges in Deploying Machine Learning: A Survey of Case Studies}
+      \field{volume}{55}
+      \field{year}{2022}
+      \field{pages}{114:1\bibrangedash 114:29}
+      \range{pages}{-1}
+      \verb{doi}
+      \verb 10.1145/3533378
+      \endverb
+    \endentry
+    \entry{pang2021deep}{article}{}{}
+      \name{author}{4}{}{%
+        {{hash=11f212154025b4456293619ddc877b97}{%
+           family={Pang},
+           familyi={P\bibinitperiod},
+           given={Guansong},
+           giveni={G\bibinitperiod}}}%
+        {{hash=9e49384c78f6861746fe787b12339aed}{%
+           family={Shen},
+           familyi={S\bibinitperiod},
+           given={Chunhua},
+           giveni={C\bibinitperiod}}}%
+        {{hash=259f81b9fe9f9737014c9eb11c08df15}{%
+           family={Cao},
+           familyi={C\bibinitperiod},
+           given={Longbing},
+           giveni={L\bibinitperiod}}}%
+        {{hash=fe8427ffc202d41693ef556d31fbbe6b}{%
+           family={Hengel},
+           familyi={H\bibinitperiod},
+           given={Anton},
+           giveni={A\bibinitperiod},
+           prefix={van\bibnamedelima den},
+           prefixi={v\bibinitperiod\bibinitdelim d\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {ACM New York, NY, USA}%
+      }
+      \strng{namehash}{38165b2e2107a54b08044ffa9190b6dd}
+      \strng{fullhash}{8a91f8973b6bbbc668cd3be36799aec7}
+      \strng{fullhashraw}{8a91f8973b6bbbc668cd3be36799aec7}
+      \strng{bibnamehash}{8a91f8973b6bbbc668cd3be36799aec7}
+      \strng{authorbibnamehash}{8a91f8973b6bbbc668cd3be36799aec7}
+      \strng{authornamehash}{38165b2e2107a54b08044ffa9190b6dd}
+      \strng{authorfullhash}{8a91f8973b6bbbc668cd3be36799aec7}
+      \strng{authorfullhashraw}{8a91f8973b6bbbc668cd3be36799aec7}
+      \field{sortinit}{P}
+      \field{sortinithash}{ff3bcf24f47321b42cb156c2cc8a8422}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{ACM Computing Surveys}
+      \field{number}{2}
+      \field{title}{Deep Learning for Anomaly Detection: A Review}
+      \field{volume}{54}
+      \field{year}{2021}
+      \field{pages}{38:1\bibrangedash 38:38}
+      \range{pages}{-1}
+      \verb{doi}
+      \verb 10.1145/3439950
+      \endverb
+    \endentry
+    \entry{ruff2018deep}{inproceedings}{}{}
+      \name{author}{8}{}{%
+        {{hash=002c037bd5c44a3c55a7523254ff0522}{%
+           family={Ruff},
+           familyi={R\bibinitperiod},
+           given={Lukas},
+           giveni={L\bibinitperiod}}}%
+        {{hash=1e584159c8f4d32a1e55772b4b798844}{%
+           family={Vandermeulen},
+           familyi={V\bibinitperiod},
+           given={Robert},
+           giveni={R\bibinitperiod}}}%
+        {{hash=d225927675f1b50ada7afdcd7141a590}{%
+           family={Goernitz},
+           familyi={G\bibinitperiod},
+           given={Nico},
+           giveni={N\bibinitperiod}}}%
+        {{hash=99c57c6d6c2549166bb9eb10bd8357a9}{%
+           family={Deecke},
+           familyi={D\bibinitperiod},
+           given={Lucas},
+           giveni={L\bibinitperiod}}}%
+        {{hash=74815873173614768c79b41ebcd30fb7}{%
+           family={Siddiqui},
+           familyi={S\bibinitperiod},
+           given={Shoaib\bibnamedelima Ahmed},
+           giveni={S\bibinitperiod\bibinitdelim A\bibinitperiod}}}%
+        {{hash=d122a2a87d21da4007f460564975e967}{%
+           family={Binder},
+           familyi={B\bibinitperiod},
+           given={Alexander},
+           giveni={A\bibinitperiod}}}%
+        {{hash=d2949700f8a8fdee1e69d478901c51d7}{%
+           family={Müller},
+           familyi={M\bibinitperiod},
+           given={Emmanuel},
+           giveni={E\bibinitperiod}}}%
+        {{hash=5f7a97296025f5dcf9ed79d67caa64fc}{%
+           family={Kloft},
+           familyi={K\bibinitperiod},
+           given={Marius},
+           giveni={M\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {PMLR}%
+      }
+      \strng{namehash}{f49556d617d4a5ffe2baa6d71026cde2}
+      \strng{fullhash}{dcbeae0afbfe40f33a90739e660c9b68}
+      \strng{fullhashraw}{dcbeae0afbfe40f33a90739e660c9b68}
+      \strng{bibnamehash}{dcbeae0afbfe40f33a90739e660c9b68}
+      \strng{authorbibnamehash}{dcbeae0afbfe40f33a90739e660c9b68}
+      \strng{authornamehash}{f49556d617d4a5ffe2baa6d71026cde2}
+      \strng{authorfullhash}{dcbeae0afbfe40f33a90739e660c9b68}
+      \strng{authorfullhashraw}{dcbeae0afbfe40f33a90739e660c9b68}
+      \field{sortinit}{R}
+      \field{sortinithash}{5e1c39a9d46ffb6bebd8f801023a9486}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 35th International Conference on Machine Learning (ICML)}
+      \field{series}{Proceedings of Machine Learning Research}
+      \field{title}{Deep One-Class Classification}
+      \field{volume}{80}
+      \field{year}{2018}
+      \field{pages}{4393\bibrangedash 4402}
+      \range{pages}{10}
+    \endentry
+    \entry{siemens2024Cost}{article}{}{}
+      \name{author}{1}{}{%
+        {{hash=74993f42c49b81f3a77103bcbb247c2b}{%
+           family={Siemens},
+           familyi={S\bibinitperiod}}}%
+      }
+      \strng{namehash}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{fullhash}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{fullhashraw}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{bibnamehash}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{authorbibnamehash}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{authornamehash}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{authorfullhash}{74993f42c49b81f3a77103bcbb247c2b}
+      \strng{authorfullhashraw}{74993f42c49b81f3a77103bcbb247c2b}
+      \field{sortinit}{S}
+      \field{sortinithash}{b164b07b29984b41daf1e85279fbc5ab}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Siemens AG}
+      \field{title}{The True Cost of Downtime 2024: How much do leading manufacturers lose through inefficient maintenance?}
+      \field{year}{2024}
+      \verb{urlraw}
+      \verb https://assets.new.siemens.com/siemens/assets/api/uuid:1b43afb5-2d07-47f7-9eb7-893fe7d0bc59/tcod-2024_original.pdf
+      \endverb
+      \verb{url}
+      \verb https://assets.new.siemens.com/siemens/assets/api/uuid:1b43afb5-2d07-47f7-9eb7-893fe7d0bc59/tcod-2024_original.pdf
+      \endverb
+    \endentry
+    \entry{vda5050standard}{report}{}{}
+      \name{author}{1}{}{%
+        {{hash=060249736800734ecbdde42acb72ae66}{%
+           family={{VDA and VDMA}},
+           familyi={V\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {Verband der Automobilindustrie e.V. (VDA)}%
+      }
+      \list{location}{1}{%
+        {Frankfurt am Main}%
+      }
+      \strng{namehash}{060249736800734ecbdde42acb72ae66}
+      \strng{fullhash}{060249736800734ecbdde42acb72ae66}
+      \strng{fullhashraw}{060249736800734ecbdde42acb72ae66}
+      \strng{bibnamehash}{060249736800734ecbdde42acb72ae66}
+      \strng{authorbibnamehash}{060249736800734ecbdde42acb72ae66}
+      \strng{authornamehash}{060249736800734ecbdde42acb72ae66}
+      \strng{authorfullhash}{060249736800734ecbdde42acb72ae66}
+      \strng{authorfullhashraw}{060249736800734ecbdde42acb72ae66}
+      \field{sortinit}{V}
+      \field{sortinithash}{afb52128e5b4dc4b843768c0113d673b}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{VDA 5050: Interface for the Communication between Mobile Robots and a Fleet Control}
+      \field{type}{techreport}
+      \field{year}{2020}
+      \verb{urlraw}
+      \verb https://github.com/VDA5050/VDA5050
+      \endverb
+      \verb{url}
+      \verb https://github.com/VDA5050/VDA5050
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+
