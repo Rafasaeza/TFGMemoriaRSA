@@ -1,0 +1,48 @@
+# LaTeX auxiliares
+*.aux
+*.toc
+*.lof
+*.lot
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.synctex(busy)
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.nlo
+*.nls
+*.ilg
+*.ind
+*.glo
+*.gls
+*.glg
+*.acn
+*.acr
+*.alg
+*.loxl
+*.spl
+*.nav
+*.snm
+*.vrb
+*.xdv
+*.dvi
+*.ps
+*.pdfsync
+
+# Logs de compilación
+*.log
+build.log.biber
+build.log.makeindex
+
+# PDF generado
+main.pdf
+
+# System / editor
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+*.swp
