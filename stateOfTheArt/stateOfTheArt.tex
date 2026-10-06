@@ -1,9 +1,14 @@
 % !TeX root = ../main.tex
 \chapter{State of the Art}
+Developing an end-to-end predictive maintenance system for fleets of AGVs and  AMRs requires synthesizing research from two core domains: deep learning-based temporal anomaly detection and scalable real-time data engineering \cite{benecki2024agv, paleyes2022challenges}. While machine learning algorithms provide the analytical capacity to identify subtle operational degradation in multivariate sensor streams, their practical viability in industrial cyber-physical systems relies entirely on a robust streaming infrastructure capable of ingesting, transforming, and persisting high-frequency telemetry with low latency and transactional reliability \cite{mohna2024medallion, okolnychyi2024iceberg}.
 
+This chapter reviews the theoretical foundations and current literature supporting both pillars. Section~\ref{sec:anomaly-taxonomy} examines the taxonomy of deep anomaly detection methodologies, motivating the selection of Gated Recurrent Unit Autoencoders (GRU-AE) with residual decomposition for root-cause diagnosis \cite{pang2021deep, su2019omnianomaly}. Section~\ref{sec:data-pipeline-lakehouse} explores scalable stream ingestion architectures, event-driven decoupling, the Data Lakehouse paradigm structured via the Medallion architecture, and high-performance time-series persistence for real-time operational monitoring \cite{mohna2024medallion, okolnychyi2024iceberg}.
 \section{Taxonomy of Deep Anomaly Detection Paradigms}
+\label{sec:anomaly-taxonomy}
 
-To build a solid theoretical groundwork for real-time telemetry analytics in autonomous mobile robotics, this section examines the comprehensive taxonomy of deep anomaly detection formulated by Pang et al. \cite{pang2021deep}. As depicted in Figure~\ref{fig:anomaly-detection-taxonomy}, algorithmic approaches in deep learning are structured into three main modeling paradigms based on the formulation of feature representation learning and its coupling with the anomaly scoring objective \cite{pang2021deep}.
+To build a solid theoretical groundwork for real-time telemetry analytics in autonomous mobile robotics, this section examines the comprehensive taxonomy of deep anomaly detection formulated by Pang et al. \cite{pang2021deep}.\\
+
+As depicted in Figure~\ref{fig:anomaly-detection-taxonomy}, algorithmic approaches in deep learning are structured into three main modeling paradigms based on the formulation of feature representation learning and its coupling with the anomaly scoring objective \cite{pang2021deep}.
 
 \begin{figure}[htbp]
   \centering
@@ -27,9 +32,8 @@ To build a solid theoretical groundwork for real-time telemetry analytics in aut
 \end{enumerate}
 
 \subsection{Methodological Selection and Alignment with AGV Telemetry Constraints}
-
-Evaluating this taxonomy against the operational requirements of AGV and AMR telemetry processing provides a clear rationale for algorithm selection in this project:
-
+\label{subsec:methodological-alignment}
+The evaluation of this taxonomy against the operational requirements of AGV and AMR telemetry processing and the challenges presented in the introductory framework provides a clear rationale for algorithm selection in this project:
 \begin{itemize}
     \item \textbf{Multivariate High-Dimensional Temporal Coupling:} Industrial telemetry emitted by mobile fleets comprises multiple synchronized time series (e.g., motor current, motor voltage, motor temperature, linear velocity, and battery state) exhibiting complex non-linear spatial-temporal correlations \cite{benecki2024agv, blazquez2021review}. \textit{Generic Normality Feature Learning}, specifically \textbf{Recurrent Autoencoder architectures (GRU-AE / LSTM-AE)}, excels at capturing these latent temporal dependencies while addressing high dimensionality and low anomaly recall rates \cite{pang2021deep, blazquez2021review}.
     
@@ -38,16 +42,42 @@ Evaluating this taxonomy against the operational requirements of AGV and AMR tel
     \item \textbf{Granular Root-Cause Explainability:} By decomposing the total reconstruction residual $\|\mathbf{X} - \hat{\mathbf{X}}\|^2$ along individual telemetry channels, generic reconstruction models provide explicit variable-level attribution, transforming abstract anomaly scores into interpretable diagnostic data for maintenance technicians \cite{pang2021deep}.
 \end{itemize}
 
-Consequently, this work adopts a \textbf{Gated Recurrent Unit Autoencoder (GRU-AE) with reconstruction residual decomposition} as the core analytical engine for real-time AGV fleet monitoring.
+Consequently, this work adopts a \textbf{Gated Recurrent Unit Autoencoder (GRU-AE) with reconstruction residual decomposition} as the core analytical engine for real-time AGV/AMR fleet monitoring.
+\subsection{Current Advances in GRU-Based Reconstruction Models for Industrial Anomaly Detection}
 
-//Revisar
+Recent literature in industrial multivariate time-series processing extensively validates the performance of Gated Recurrent Unit (GRU) autoencoders over traditional recurrent architectures \cite{dey2017gate, su2019omnianomaly}. While Long Short-Term Memory (LSTM) networks employ three gating mechanisms (input, forget, and output), GRU networks streamline temporal state transitions using two gates (reset and update) \cite{dey2017gate}. This structural reduction decreases parameter complexity and computational memory overhead, leading to faster training convergence and lower inference latency without compromising temporal representation capacity \cite{dey2017gate, fraunhofer2024qgru}.
+
+In multivariate industrial control and robotic telemetry, GRU-based autoencoding models—such as \textit{OmniAnomaly} \cite{su2019omnianomaly} and \textit{InterFusion} \cite{shen2021interfusion}—learn the latent joint probability distribution of nominal system signals. When an anomalous event alters physical dynamics (e.g., an abnormal motor current spike accompanied by unexpected thermal accumulation), the network fails to reconstruct the out-of-distribution sequence, producing a distinct elevation in reconstruction error $\|\mathbf{x}_t - \hat{\mathbf{x}}_t\|^2$ \cite{su2019omnianomaly}. 
+
+Furthermore, channel-level residual decomposition allows mapping the continuous reconstruction error vector $\mathbf{e}_t = (x_{t,1} - \hat{x}_{t,1})^2, \dots, (x_{t,M} - \hat{x}_{t,M})^2$ directly to specific sensors \cite{su2019omnianomaly, shen2021interfusion}. By isolating the specific variables contributing most to the overall residual, this mechanism transforms black-box model outputs into actionable diagnostic labels (e.g., identifying whether an alert stems from electrical degradation or mechanical friction) \cite{shen2021interfusion}. Lightweight and quantized variants of GRU autoencoders further demonstrate up to $75\%$ reduction in memory footprint, making them particularly suited for low-latency inference within real-time stream pipelines \cite{fraunhofer2024qgru}.
+\subsection{Root-Cause Analysis and Explainability in Cyber-Physical Telemetry}
+
+While deep autoencoding architectures effectively identify temporal deviations in high-dimensional telemetry, returning an abstract scalar anomaly score presents significant operational limitations for plant technicians \cite{su2019omnianomaly, shen2021interfusion}. In industrial predictive maintenance, anomaly detection must be coupled with Root-Cause Analysis (RCA) and Explainable AI (XAI) mechanisms to isolate faulty subsystems \cite{shen2021interfusion}.
+
+To bridge this interpretability gap, reconstruction-based models utilize channel-level residual decomposition \cite{su2019omnianomaly}. Given an observed telemetry vector $\mathbf{x}_t \in \mathbb{R}^M$ and its reconstructed counterpart $\hat{\mathbf{x}}_t \in \mathbb{R}^M$, the individual reconstruction error for channel $m$ is expressed as:
+
+\begin{equation}
+e_{t,m} = (x_{t,m} - \hat{x}_{t,m})^2
+\end{equation}
+
+By evaluating the contribution of each individual sensor variable $m \in \{1, \dots, M\}$ to the total residual $\|\mathbf{x}_t - \hat{\mathbf{x}}_t\|^2$, the system identifies specific failure modes \cite{su2019omnianomaly, shen2021interfusion}. For instance, a localized spike in $e_{t,\text{temp}}$ combined with $e_{t,\text{curr}}$ isolates electromechanical friction in the motor assembly, whereas isolated deviations in $e_{t,\text{soc}}$ point to battery cell degradation. Mapping channel-wise residual signatures to predefined domain rules converts continuous neural outputs into non-ambiguous, human-interpretable diagnostic labels for maintenance personnel.
+\section{Pick up from data}
+A big limitation with the anomaly detections in AGVs and AMRs is the lack of data, and the fact that if it wants to be able to train the model, a lot of robots are needed for this porpose.
+A solution that is so known in the literature is the transfer learning, which is a technique that allows to use a model that has been trained in a different domain and apply it to the domain of interest. This technique is very useful when there is a lack of data in the domain of interest, and it has been used in the literature for anomaly detection in AGVs and AMRs.
+This section will dive into the different techniques that have been used for picking up data for anomaly detection in AGVs and AMRs, when was not possible to use a big fleet of this assets.
+\subsection{Physics-Informed Synthetic Telemetry and Digital Twin Emulation}
+
+A major constraint in developing machine learning pipelines for industrial mobile robotics is the limited availability of real-world operational data and failure records \cite{benecki2024agv, paleyes2022challenges}. Physical AGV deployments are constrained by hardware costs, safety protocols, and the rarity of destructive fault events in production environments.
+
+To address this data scarcity, industrial frameworks leverage physics-informed Digital Twins and synthetic telemetry generators. Rather than relying solely on pure protocol-compliance emulators, modern simulation environments model real-world dynamic metrics—including thermal accumulation, battery discharge curves, motor voltage fluctuations, and mechanical payload resistance. Emulating high-throughput VDA 5050 telemetry via high-performance systems languages (such as Rust) guarantees deterministic execution and memory safety without garbage-collection overhead, enabling continuous, reproducible stress-testing of downstream ingestion pipelines and anomaly detection models under realistic fault conditions.
+
 \section{Scalable Real-Time Telemetry Pipelines and Data Lakehouse Architecture}
-
+\label{sec:data-pipeline-lakehouse}
 Processing high-frequency telemetry streams generated by autonomous mobile fleets poses severe data engineering challenges regarding ingestion throughput, low-latency transformations, and transactional persistence \cite{mohna2024medallion}. Traditional data warehouse architectures struggle with the velocity and semi-structured nature of IoT payloads, whereas raw data lakes lack transactional guarantees, resulting in data corruption and poor query performance \cite{okolnychyi2024iceberg}. This section examines the architectural paradigms required to ingest, refine, and query massive AGV telemetry streams for real-time inference and historical analytics.
 
 \subsection{Real-Time Stream Ingestion and Decoupled Messaging Layer}
 
-To manage the continuous telemetry stream emitted by industrial AGVs, modern cyber-physical infrastructures decouple data ingestion from analytical processing using event-driven broker architectures \cite{vda5050}. Protocols such as VDA 5050 standardize state and order exchanges via Lightweight Message Queuing Telemetry Transport (MQTT) over wireless networks \cite{vda5050, franke2023vda}. However, extending telemetry to include continuous physical health metric, such as motor current, thermal dynamics, and battery degradatio, demands high-throughput streaming layers capable of handling backpressure and bursty traffic \cite{franke2023vda}.
+To manage the continuous telemetry stream emitted by industrial AGVs, modern cyber-physical infrastructures decouple data ingestion from analytical processing using event-driven broker architectures \cite{vda5050}. Protocols such as VDA 5050 standardize state and order exchanges via Lightweight Message Queuing Telemetry Transport (MQTT) over wireless networks \cite{vda5050, franke2023vda}. However, extending telemetry to include continuous physical health metrics—such as motor current, thermal dynamics, and battery degradation—demands high-throughput streaming layers capable of handling backpressure and bursty traffic \cite{franke2023vda}.
 
 Distributed stream-processing engines (e.g., Apache Spark Structured Streaming) ingest raw MQTT payloads, execute schema validation, append ingestion metadata, and cleanse malformed records in near real-time. The cleansed stream is published to high-performance event brokers (e.g., Redpanda / Apache Kafka), establishing a publish-subscribe boundary that isolates edge telemetry generation from downstream machine learning consumers and storage engines.
 
@@ -60,7 +90,7 @@ Data persistence is structured according to the \textbf{Medallion Architecture},
 \begin{enumerate}
     \item \textbf{Bronze Layer (Raw Telemetry Ingestion):} Acts as an append-only, immutable landing zone. Incoming raw JSON payloads from the broker layer are persisted in their original format to preserve an auditable lineage of historic signals \cite{mohna2024medallion}.
     \item \textbf{Silver Layer (Cleaned and Enriched Data):} Stores validated, deduplicated, and schema-enforced events. Signals are converted into columnar formats (e.g., Apache Parquet) managed by open table formats like \textbf{Apache Iceberg} \cite{okolnychyi2024iceberg}. This layer serves as the primary feature source for downstream deep learning models (e.g., GRU-Autoencoders) \cite{mohna2024medallion}.
-    \item \textbf{Gold Layer (Business Aggregations and Diagnostic Outputs):} Holds aggregated operational metrics, statistical summaries, and model outputs, such as reconstruction error scores and mapped diagnostic fault labels, enabling performant analytical queries \cite{mohna2024medallion}.
+    \item \textbf{Gold Layer (Business Aggregations and Diagnostic Outputs):} Holds aggregated operational metrics, statistical summaries, and model outputs—such as reconstruction error scores and mapped diagnostic fault labels—enabling performant analytical queries \cite{mohna2024medallion}.
 \end{enumerate}
 
 \subsection{Transactional Consistency and Partition Evolution with Apache Iceberg}

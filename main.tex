@@ -1,6 +1,8 @@
 % !TeX program = xelatex
 \documentclass{report}
 
+\PassOptionsToPackage{intoc}{nomencl}
+
 %───────── Plantilla, portadas y contraportada ─────────────────────────
 \usepackage{template/sty_files/template-TFGenglish-uma}
 
@@ -90,7 +92,7 @@ Maintenance },
 \cleardoublepage
 
 %────────────────────── Nomenclatura ───────────────────────────────────
-\nomenclature{}{}
+\input{nomenclature/nomenclature}
 \printnomenclature
 \cleardoublepage
 

@@ -1,31 +1,35 @@
 {
   "latex-workshop.latex.tools": [
     {
-      "name": "xelatex",
-      "command": "C:\\Users\\rs97881\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64\\xelatex.exe",
+      "name": "build.ps1",
+      "command": "powershell.exe",
       "args": [
-        "-synctex=1",
-        "-interaction=nonstopmode",
-        "-file-line-error",
-        "%DOC%"
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "build.ps1"
       ]
     },
     {
-      "name": "biber",
-      "command": "C:\\Users\\rs97881\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64\\biber.exe",
-      "args": [
-        "%DOC%"
-      ]
+      "name": "build.sh",
+      "command": "bash",
+      "args": ["build.sh"]
     }
   ],
   "latex-workshop.latex.recipes": [
     {
-      "name": "xelatex + biber",
-      "tools": ["xelatex", "biber", "xelatex", "xelatex"]
+      "name": "Windows (build.ps1)",
+      "tools": ["build.ps1"]
+    },
+    {
+      "name": "WSL (build.sh)",
+      "tools": ["build.sh"]
     }
   ],
-  "latex-workshop.latex.recipe.default": "xelatex + biber",
+  "latex-workshop.latex.recipe.default": "Windows (build.ps1)",
   "latex-workshop.rootFile.rootFiles": ["main.tex", "./main.tex"],
   "latex-workshop.latex.autoBuild.run": "onSave",
-  "latex-workshop.view.pdf.viewer": "tab"
+  "latex-workshop.latex.autoBuild.interval": 1500,
+  "latex-workshop.latex.autoClean.run": "never",
+  "latex-workshop.view.pdf.viewer": "tab",
+  "latex-workshop.message.badbox.show": false
 }

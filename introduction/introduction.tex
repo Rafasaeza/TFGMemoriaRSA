@@ -6,7 +6,8 @@
 Industry 4.0 is no longer just a concept, but a reality transforming factories worldwide. 
 The arrival of these emerging technologies opens up vast opportunities to optimize production processe, shifting the focus from mere automation toward creating truly intelligent factories.\\
 
-A key enabler of Industry 4.0 is the deployment of Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs), which are capable of navigating autonomously through factories, warehouses, and complex environments. 
+A key enabler of Industry 4.0 is the deployment of Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs), which are capable of navigating autonomously through factories, warehouses, and complex environments. \\
+
 Their adoption across industries continues to surge, with market research pointing to sustained, strong growth in the coming years \cite{imarc2026agv}.\\
 
 \begin{figure}[ht]
@@ -21,9 +22,11 @@ Studies reveal that unexpected downtime can range from \$36,000 per hour in fast
 Consequently, preventing such disruptions is not merely an operational challenge, but a critical financial priority for modern manufacturers.\\
 
 A promising solution to this challenge is predictive maintenance, which can significantly reduce vehicle failures and the associated costs of unplanned downtime. 
-The literature on machine learning for anomaly detection is extensive, however, a significant gap remains between theoretical studies and real-world implementation, as researchers encounter major hurdles when scaling proposed solutions to production environments \cite{paleyes2022challenges}.
+The literature on machine learning for anomaly detection is extensive, however, a significant gap remains between theoretical studies and real-world implementation, as researchers encounter major hurdles when scaling proposed solutions to production environments \cite{paleyes2022challenges}.\\
+
 Through a review of this literature, four key limitations emerge as critical factors when developing a real-time anomaly detection system for AGVs and AMRs \cite{benecki2024agv}:
 \begin{itemize}
+\label{item:challenges}
     \item \textbf{High-volume data management and processing:} Managing and automatically processing vast amounts of data, ensuring not only scale handling but also the quality and relevance of the ingested information.
     \item \textbf{Dynamism of industrial environments:} The inherently dynamic nature of manufacturing settings requires continuous adaptation to shifting conditions and novel anomaly types.
     \item \textbf{Ambiguity of anomalies:} The challenge of accurately classifying anomalies to establish a robust mapping between newly detected anomalies and known failure modes.
@@ -63,7 +66,10 @@ To achieve this overarching goal, the project is structured into five specific t
 This multi-layered approach not only supports live monitoring, but through the Medallion Architecture and Iceberg time-travel capabilities, it allows historical raw data (Bronze layer) to be reprocessed whenever model architectures or machine learning requirements evolve.
 
 \subsection{Industrial Context and Collaboration}
-This project is carried out in collaboration with EDAG Engineering Group. As an international engineering service provider for the automotive and manufacturing industries, EDAG actively develops cutting-edge Industry 4.0 solutions. Developing this project during an internship at EDAG provides direct insight into real-world industrial environments, system requirements, and deployment constraints. Specifically, this work contributes to the \textbf{Metys} project \cite{edagMetys}, an initiative aimed at optimizing software development and smart production workflows.
+This project is carried out in collaboration with EDAG Engineering Group. 
+As an international engineering service provider for the automotive and manufacturing industries, EDAG actively develops cutting-edge Industry 4.0 solutions. 
+Developing this project during an internship at EDAG provides direct insight into real-world industrial environments, system requirements, and deployment constraints. 
+Specifically, this work contributes to the \textbf{Metys} project \cite{edagMetys}, an initiative aimed at optimizing software development and smart production workflows.
 
 \section{Scope and Limitations}
 To be done\dots

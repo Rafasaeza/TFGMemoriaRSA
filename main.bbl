@@ -186,6 +186,40 @@
       \verb 10.51483/IJAIML.6.4s.2026.226-236
       \endverb
     \endentry
+    \entry{dey2017gate}{inproceedings}{}{}
+      \name{author}{2}{}{%
+        {{hash=cdbe375f4349622904210be2071a2806}{%
+           family={Dey},
+           familyi={D\bibinitperiod},
+           given={Rahul},
+           giveni={R\bibinitperiod}}}%
+        {{hash=562329d35461b8ad79d7293e6f6f7164}{%
+           family={Salem},
+           familyi={S\bibinitperiod},
+           given={Fathi\bibnamedelima M.},
+           giveni={F\bibinitperiod\bibinitdelim M\bibinitperiod}}}%
+      }
+      \strng{namehash}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{fullhash}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{fullhashraw}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{bibnamehash}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{authorbibnamehash}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{authornamehash}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{authorfullhash}{0ffcc0752db5a42176e68e794ddc16f3}
+      \strng{authorfullhashraw}{0ffcc0752db5a42176e68e794ddc16f3}
+      \field{sortinit}{D}
+      \field{sortinithash}{6f385f66841fb5e82009dc833c761848}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{IEEE 60th International Midwest Symposium on Circuits and Systems (MWSCAS)}
+      \field{title}{Gate-Variants of Gated Recurrent Unit (GRU) Neural Networks}
+      \field{year}{2017}
+      \field{pages}{1597\bibrangedash 1600}
+      \range{pages}{4}
+      \verb{doi}
+      \verb 10.1109/MWSCAS.2017.8053243
+      \endverb
+    \endentry
     \entry{edagMetys}{online}{}{}
       \name{author}{1}{}{%
         {{hash=a9c4c4e3cb038692ff0905713cff4ef9}{%
@@ -212,6 +246,55 @@
       \verb{url}
       \verb https://www.edag.com/en/solutions/metys
       \endverb
+    \endentry
+    \entry{franke2023vda}{inproceedings}{}{}
+      \true{moreauthor}
+      \true{morelabelname}
+      \name{author}{1}{}{%
+        {{hash=fe2e33f968d3e8cab4c76c3805583cf2}{%
+           family={Franke},
+           familyi={F\bibinitperiod},
+           given={Sven},
+           giveni={S\bibinitperiod}}}%
+      }
+      \strng{namehash}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{fullhash}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{fullhashraw}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{bibnamehash}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{authorbibnamehash}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{authornamehash}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{authorfullhash}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \strng{authorfullhashraw}{3cd9675b3ed17ed5c248b7751d7cf826}
+      \field{sortinit}{F}
+      \field{sortinithash}{2638baaa20439f1b5a8f80c6c08a13b4}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Logistics Journal: Proceedings (19. Fachkolloquium Logistik der WGTL)}
+      \field{title}{Identification of Requirements and Opportunities for New Types of Standardized Interfaces for AGV Systems Based on the VDA 5050 Concept}
+      \field{volume}{2023}
+      \field{year}{2023}
+    \endentry
+    \entry{fraunhofer2024qgru}{article}{}{}
+      \name{author}{1}{}{%
+        {{hash=45799f2d853a2258edefc56208881f93}{%
+           family={{Fraunhofer Consortium}},
+           familyi={F\bibinitperiod}}}%
+      }
+      \strng{namehash}{45799f2d853a2258edefc56208881f93}
+      \strng{fullhash}{45799f2d853a2258edefc56208881f93}
+      \strng{fullhashraw}{45799f2d853a2258edefc56208881f93}
+      \strng{bibnamehash}{45799f2d853a2258edefc56208881f93}
+      \strng{authorbibnamehash}{45799f2d853a2258edefc56208881f93}
+      \strng{authornamehash}{45799f2d853a2258edefc56208881f93}
+      \strng{authorfullhash}{45799f2d853a2258edefc56208881f93}
+      \strng{authorfullhashraw}{45799f2d853a2258edefc56208881f93}
+      \field{sortinit}{F}
+      \field{sortinithash}{2638baaa20439f1b5a8f80c6c08a13b4}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{IEEE Transactions on Neural Networks and Learning Systems}
+      \field{title}{Quantized Gated Recurrent Unit Variational Autoencoder (Q-GRU-VAE) for Resource-Constrained Industrial Anomaly Detection}
+      \field{year}{2024}
     \endentry
     \entry{imarc2026agv}{report}{}{}
       \name{author}{1}{}{%
@@ -243,6 +326,65 @@
       \verb{url}
       \verb https://www.imarcgroup.com/automated-guided-vehicles-market
       \endverb
+    \endentry
+    \entry{mohna2024medallion}{article}{}{}
+      \name{author}{2}{}{%
+        {{hash=a914e42d8c900d5086d04c3072474edb}{%
+           family={Mohna},
+           familyi={M\bibinitperiod},
+           given={Hosne\bibnamedelima Ara},
+           giveni={H\bibinitperiod\bibinitdelim A\bibinitperiod}}}%
+        {{hash=8b721a47adfb5488d0074ff298495763}{%
+           family={Barua},
+           familyi={B\bibinitperiod},
+           given={Tonmoy},
+           giveni={T\bibinitperiod}}}%
+      }
+      \strng{namehash}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{fullhash}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{fullhashraw}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{bibnamehash}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{authorbibnamehash}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{authornamehash}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{authorfullhash}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \strng{authorfullhashraw}{19a94c52e5d5052ea4b72f9f554bfc86}
+      \field{sortinit}{M}
+      \field{sortinithash}{4625c616857f13d17ce56f7d4f97d451}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{ResearchGate Preprint}
+      \field{title}{AI-Ready Data Engineering Pipelines: A Review of Medallion Architecture and Cloud-Based Integration Models}
+      \field{year}{2024}
+    \endentry
+    \entry{okolnychyi2024iceberg}{article}{}{}
+      \true{moreauthor}
+      \true{morelabelname}
+      \name{author}{1}{}{%
+        {{hash=3a1a638849eca8c9e3d0bc6ac998fe89}{%
+           family={Okolnychyi},
+           familyi={O\bibinitperiod},
+           given={Anton},
+           giveni={A\bibinitperiod}}}%
+      }
+      \strng{namehash}{7ffcbcac734045f8eec901a83b323970}
+      \strng{fullhash}{7ffcbcac734045f8eec901a83b323970}
+      \strng{fullhashraw}{7ffcbcac734045f8eec901a83b323970}
+      \strng{bibnamehash}{7ffcbcac734045f8eec901a83b323970}
+      \strng{authorbibnamehash}{7ffcbcac734045f8eec901a83b323970}
+      \strng{authornamehash}{7ffcbcac734045f8eec901a83b323970}
+      \strng{authorfullhash}{7ffcbcac734045f8eec901a83b323970}
+      \strng{authorfullhashraw}{7ffcbcac734045f8eec901a83b323970}
+      \field{sortinit}{O}
+      \field{sortinithash}{2cd7140a07aea5341f9e2771efe90aae}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Proceedings of the VLDB Endowment (PVLDB)}
+      \field{number}{12}
+      \field{title}{Row-Level Operations in Apache Iceberg}
+      \field{volume}{17}
+      \field{year}{2024}
+      \field{pages}{4159\bibrangedash 4162}
+      \range{pages}{4}
     \endentry
     \entry{paleyes2022challenges}{article}{}{}
       \name{author}{3}{}{%
@@ -339,6 +481,28 @@
       \verb 10.1145/3439950
       \endverb
     \endentry
+    \entry{icebergIncremental2026}{article}{}{}
+      \name{author}{1}{}{%
+        {{hash=f1df93075b49592a4f4441537b3bc114}{%
+           family={{Research Consortium}},
+           familyi={R\bibinitperiod}}}%
+      }
+      \strng{namehash}{f1df93075b49592a4f4441537b3bc114}
+      \strng{fullhash}{f1df93075b49592a4f4441537b3bc114}
+      \strng{fullhashraw}{f1df93075b49592a4f4441537b3bc114}
+      \strng{bibnamehash}{f1df93075b49592a4f4441537b3bc114}
+      \strng{authorbibnamehash}{f1df93075b49592a4f4441537b3bc114}
+      \strng{authornamehash}{f1df93075b49592a4f4441537b3bc114}
+      \strng{authorfullhash}{f1df93075b49592a4f4441537b3bc114}
+      \strng{authorfullhashraw}{f1df93075b49592a4f4441537b3bc114}
+      \field{sortinit}{R}
+      \field{sortinithash}{5e1c39a9d46ffb6bebd8f801023a9486}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Analytical Data Engineering}
+      \field{title}{Efficient Incremental Data Modeling in Apache Iceberg-Based Analytical Pipelines: Partitioning and Snapshot Optimization Strategies}
+      \field{year}{2026}
+    \endentry
     \entry{ruff2018deep}{inproceedings}{}{}
       \name{author}{8}{}{%
         {{hash=002c037bd5c44a3c55a7523254ff0522}{%
@@ -405,6 +569,47 @@
       \field{pages}{4393\bibrangedash 4402}
       \range{pages}{10}
     \endentry
+    \entry{shen2021interfusion}{inproceedings}{}{}
+      \name{author}{4}{}{%
+        {{hash=f1625e69dd01e4d86402e9815bebb102}{%
+           family={Shen},
+           familyi={S\bibinitperiod},
+           given={Li},
+           giveni={L\bibinitperiod}}}%
+        {{hash=e47c5bcbf0f9722b5293d952aaf44a2f}{%
+           family={Li},
+           familyi={L\bibinitperiod},
+           given={Weilun},
+           giveni={W\bibinitperiod}}}%
+        {{hash=2e7a844d05a2f80fa0624d3adccd8995}{%
+           family={Liu},
+           familyi={L\bibinitperiod},
+           given={Yuxing},
+           giveni={Y\bibinitperiod}}}%
+        {{hash=dbac117f109e97ed17cb0c35d41a5fb9}{%
+           family={Wu},
+           familyi={W\bibinitperiod},
+           given={Queng},
+           giveni={Q\bibinitperiod}}}%
+      }
+      \strng{namehash}{f89b537c1775c4be2635bf65172d52de}
+      \strng{fullhash}{7bcb8f67e92f1bd5a2342f07296db9e5}
+      \strng{fullhashraw}{7bcb8f67e92f1bd5a2342f07296db9e5}
+      \strng{bibnamehash}{7bcb8f67e92f1bd5a2342f07296db9e5}
+      \strng{authorbibnamehash}{7bcb8f67e92f1bd5a2342f07296db9e5}
+      \strng{authornamehash}{f89b537c1775c4be2635bf65172d52de}
+      \strng{authorfullhash}{7bcb8f67e92f1bd5a2342f07296db9e5}
+      \strng{authorfullhashraw}{7bcb8f67e92f1bd5a2342f07296db9e5}
+      \field{sortinit}{S}
+      \field{sortinithash}{b164b07b29984b41daf1e85279fbc5ab}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery \& Data Mining}
+      \field{title}{InterFusion: Long-Term Anomaly Detection and Diagnosis in Multivariate Time Series via Hierarchical Variational Autoencoder}
+      \field{year}{2021}
+      \field{pages}{1442\bibrangedash 1452}
+      \range{pages}{11}
+    \endentry
     \entry{siemens2024Cost}{article}{}{}
       \name{author}{1}{}{%
         {{hash=74993f42c49b81f3a77103bcbb247c2b}{%
@@ -431,6 +636,60 @@
       \endverb
       \verb{url}
       \verb https://assets.new.siemens.com/siemens/assets/api/uuid:1b43afb5-2d07-47f7-9eb7-893fe7d0bc59/tcod-2024_original.pdf
+      \endverb
+    \endentry
+    \entry{su2019omnianomaly}{inproceedings}{}{}
+      \name{author}{6}{}{%
+        {{hash=4593b6e74f9bfdb949dc913e765bd304}{%
+           family={Su},
+           familyi={S\bibinitperiod},
+           given={Ya},
+           giveni={Y\bibinitperiod}}}%
+        {{hash=fc02b26345e786a0c68db7ed5515f9dd}{%
+           family={Zhao},
+           familyi={Z\bibinitperiod},
+           given={Youjian},
+           giveni={Y\bibinitperiod}}}%
+        {{hash=a31bb192b656c31aefafab4d1d477e29}{%
+           family={Niu},
+           familyi={N\bibinitperiod},
+           given={Chenhao},
+           giveni={C\bibinitperiod}}}%
+        {{hash=6e0407cf2820edaaaeebbc9f383e0490}{%
+           family={Liu},
+           familyi={L\bibinitperiod},
+           given={Rong},
+           giveni={R\bibinitperiod}}}%
+        {{hash=eb173b634824862e3270fd61767a27db}{%
+           family={Sun},
+           familyi={S\bibinitperiod},
+           given={Sunwei},
+           giveni={S\bibinitperiod}}}%
+        {{hash=26b02dc0af8c6f31cfc3df3a238db077}{%
+           family={Pei},
+           familyi={P\bibinitperiod},
+           given={Dan},
+           giveni={D\bibinitperiod}}}%
+      }
+      \strng{namehash}{e903b9ed2b136d1dfb01cf4650c1618a}
+      \strng{fullhash}{6d75fb025e84ca45dd5c6017159f81fb}
+      \strng{fullhashraw}{6d75fb025e84ca45dd5c6017159f81fb}
+      \strng{bibnamehash}{6d75fb025e84ca45dd5c6017159f81fb}
+      \strng{authorbibnamehash}{6d75fb025e84ca45dd5c6017159f81fb}
+      \strng{authornamehash}{e903b9ed2b136d1dfb01cf4650c1618a}
+      \strng{authorfullhash}{6d75fb025e84ca45dd5c6017159f81fb}
+      \strng{authorfullhashraw}{6d75fb025e84ca45dd5c6017159f81fb}
+      \field{sortinit}{S}
+      \field{sortinithash}{b164b07b29984b41daf1e85279fbc5ab}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining}
+      \field{title}{Robust Anomaly Detection for Multivariate Time Series through Stochastic Recurrent Neural Network}
+      \field{year}{2019}
+      \field{pages}{2828\bibrangedash 2837}
+      \range{pages}{10}
+      \verb{doi}
+      \verb 10.1145/3292500.3330672
       \endverb
     \endentry
     \entry{vda5050standard}{report}{}{}
@@ -466,6 +725,31 @@
       \verb{url}
       \verb https://github.com/VDA5050/VDA5050
       \endverb
+    \endentry
+    \entry{vda5050}{report}{}{}
+      \name{author}{1}{}{%
+        {{hash=f9b6dd7b1b45298e3807a14eda0bd2df}{%
+           family={{Verband der Automobilindustrie (VDA)}},
+           familyi={V\bibinitperiod}}}%
+      }
+      \list{institution}{1}{%
+        {Verband der Automobilindustrie e.V.}%
+      }
+      \strng{namehash}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{fullhash}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{fullhashraw}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{bibnamehash}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{authorbibnamehash}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{authornamehash}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{authorfullhash}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \strng{authorfullhashraw}{f9b6dd7b1b45298e3807a14eda0bd2df}
+      \field{sortinit}{V}
+      \field{sortinithash}{afb52128e5b4dc4b843768c0113d673b}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{title}{VDA 5050: Specification for AGV Communication Interface (Version 2.1.0)}
+      \field{type}{techreport}
+      \field{year}{2025}
     \endentry
   \enddatalist
 \endrefsection

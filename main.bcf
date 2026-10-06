@@ -2383,45 +2383,73 @@
     <bcf:citekey order="10" intorder="1">bostanciVda5050</bcf:citekey>
     <bcf:citekey order="11" intorder="1">dey2026lakehouse</bcf:citekey>
     <bcf:citekey order="12" intorder="1">edagMetys</bcf:citekey>
-    <bcf:citekey order="13" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="14" intorder="1">pang2021deep</bcf:citekey>
+    <bcf:citekey order="13" intorder="1">benecki2024agv</bcf:citekey>
+    <bcf:citekey order="13" intorder="2">paleyes2022challenges</bcf:citekey>
+    <bcf:citekey order="14" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="14" intorder="2">okolnychyi2024iceberg</bcf:citekey>
     <bcf:citekey order="15" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="16" intorder="1">pang2021deep</bcf:citekey>
+    <bcf:citekey order="15" intorder="2">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="16" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="16" intorder="2">okolnychyi2024iceberg</bcf:citekey>
     <bcf:citekey order="17" intorder="1">pang2021deep</bcf:citekey>
     <bcf:citekey order="18" intorder="1">pang2021deep</bcf:citekey>
     <bcf:citekey order="19" intorder="1">pang2021deep</bcf:citekey>
     <bcf:citekey order="20" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="20" intorder="2">blazquez2021review</bcf:citekey>
     <bcf:citekey order="21" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="22" intorder="1">ruff2018deep</bcf:citekey>
-    <bcf:citekey order="23" intorder="1">ruff2018deep</bcf:citekey>
+    <bcf:citekey order="22" intorder="1">pang2021deep</bcf:citekey>
+    <bcf:citekey order="23" intorder="1">pang2021deep</bcf:citekey>
     <bcf:citekey order="24" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="25" intorder="1">benecki2024agv</bcf:citekey>
-    <bcf:citekey order="25" intorder="2">blazquez2021review</bcf:citekey>
-    <bcf:citekey order="26" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="26" intorder="2">blazquez2021review</bcf:citekey>
-    <bcf:citekey order="27" intorder="1">benecki2024agv</bcf:citekey>
-    <bcf:citekey order="27" intorder="2">paleyes2022challenges</bcf:citekey>
+    <bcf:citekey order="24" intorder="2">blazquez2021review</bcf:citekey>
+    <bcf:citekey order="25" intorder="1">pang2021deep</bcf:citekey>
+    <bcf:citekey order="26" intorder="1">ruff2018deep</bcf:citekey>
+    <bcf:citekey order="27" intorder="1">ruff2018deep</bcf:citekey>
     <bcf:citekey order="28" intorder="1">pang2021deep</bcf:citekey>
-    <bcf:citekey order="29" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="30" intorder="1">okolnychyi2024iceberg</bcf:citekey>
-    <bcf:citekey order="31" intorder="1">vda5050</bcf:citekey>
-    <bcf:citekey order="32" intorder="1">vda5050</bcf:citekey>
-    <bcf:citekey order="32" intorder="2">franke2023vda</bcf:citekey>
-    <bcf:citekey order="33" intorder="1">franke2023vda</bcf:citekey>
-    <bcf:citekey order="34" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="35" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="35" intorder="2">okolnychyi2024iceberg</bcf:citekey>
-    <bcf:citekey order="36" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="37" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="38" intorder="1">okolnychyi2024iceberg</bcf:citekey>
-    <bcf:citekey order="39" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="40" intorder="1">mohna2024medallion</bcf:citekey>
-    <bcf:citekey order="41" intorder="1">okolnychyi2024iceberg</bcf:citekey>
-    <bcf:citekey order="42" intorder="1">okolnychyi2024iceberg</bcf:citekey>
-    <bcf:citekey order="43" intorder="1">icebergIncremental2026</bcf:citekey>
-    <bcf:citekey order="44" intorder="1">okolnychyi2024iceberg</bcf:citekey>
-    <bcf:citekey order="45" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="29" intorder="1">benecki2024agv</bcf:citekey>
+    <bcf:citekey order="29" intorder="2">blazquez2021review</bcf:citekey>
+    <bcf:citekey order="30" intorder="1">pang2021deep</bcf:citekey>
+    <bcf:citekey order="30" intorder="2">blazquez2021review</bcf:citekey>
+    <bcf:citekey order="31" intorder="1">benecki2024agv</bcf:citekey>
+    <bcf:citekey order="31" intorder="2">paleyes2022challenges</bcf:citekey>
+    <bcf:citekey order="32" intorder="1">pang2021deep</bcf:citekey>
+    <bcf:citekey order="33" intorder="1">dey2017gate</bcf:citekey>
+    <bcf:citekey order="33" intorder="2">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="34" intorder="1">dey2017gate</bcf:citekey>
+    <bcf:citekey order="35" intorder="1">dey2017gate</bcf:citekey>
+    <bcf:citekey order="35" intorder="2">fraunhofer2024qgru</bcf:citekey>
+    <bcf:citekey order="36" intorder="1">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="37" intorder="1">shen2021interfusion</bcf:citekey>
+    <bcf:citekey order="38" intorder="1">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="39" intorder="1">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="39" intorder="2">shen2021interfusion</bcf:citekey>
+    <bcf:citekey order="40" intorder="1">shen2021interfusion</bcf:citekey>
+    <bcf:citekey order="41" intorder="1">fraunhofer2024qgru</bcf:citekey>
+    <bcf:citekey order="42" intorder="1">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="42" intorder="2">shen2021interfusion</bcf:citekey>
+    <bcf:citekey order="43" intorder="1">shen2021interfusion</bcf:citekey>
+    <bcf:citekey order="44" intorder="1">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="45" intorder="1">su2019omnianomaly</bcf:citekey>
+    <bcf:citekey order="45" intorder="2">shen2021interfusion</bcf:citekey>
+    <bcf:citekey order="46" intorder="1">benecki2024agv</bcf:citekey>
+    <bcf:citekey order="46" intorder="2">paleyes2022challenges</bcf:citekey>
+    <bcf:citekey order="47" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="48" intorder="1">okolnychyi2024iceberg</bcf:citekey>
+    <bcf:citekey order="49" intorder="1">vda5050</bcf:citekey>
+    <bcf:citekey order="50" intorder="1">vda5050</bcf:citekey>
+    <bcf:citekey order="50" intorder="2">franke2023vda</bcf:citekey>
+    <bcf:citekey order="51" intorder="1">franke2023vda</bcf:citekey>
+    <bcf:citekey order="52" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="53" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="53" intorder="2">okolnychyi2024iceberg</bcf:citekey>
+    <bcf:citekey order="54" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="55" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="56" intorder="1">okolnychyi2024iceberg</bcf:citekey>
+    <bcf:citekey order="57" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="58" intorder="1">mohna2024medallion</bcf:citekey>
+    <bcf:citekey order="59" intorder="1">okolnychyi2024iceberg</bcf:citekey>
+    <bcf:citekey order="60" intorder="1">okolnychyi2024iceberg</bcf:citekey>
+    <bcf:citekey order="61" intorder="1">icebergIncremental2026</bcf:citekey>
+    <bcf:citekey order="62" intorder="1">okolnychyi2024iceberg</bcf:citekey>
+    <bcf:citekey order="63" intorder="1">mohna2024medallion</bcf:citekey>
   </bcf:section>
   <!-- SORTING TEMPLATES -->
   <bcf:sortingtemplate name="nyt">
