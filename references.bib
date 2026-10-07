@@ -117,17 +117,22 @@
   publisher = {ACM New York, NY, USA},
   doi       = {10.1145/3444690}
 }
-
-@inproceedings{ruff2018deep,
-  author    = {Ruff, Lukas and Vandermeulen, Robert and Goernitz, Nico and Deecke, Lucas and Siddiqui, Shoaib Ahmed and Binder, Alexander and M{\"u}ller, Emmanuel and Kloft, Marius},
-  title     = {Deep One-Class Classification},
-  booktitle = {Proceedings of the 35th International Conference on Machine Learning (ICML)},
-  series    = {Proceedings of Machine Learning Research},
-  volume    = {80},
-  pages     = {4393--4402},
-  year      = {2018},
-  publisher = {PMLR}
+@InProceedings{pmlr-v80-ruff18a,
+  title = 	 {Deep One-Class Classification},
+  author =       {Ruff, Lukas and Vandermeulen, Robert and Goernitz, Nico and Deecke, Lucas and Siddiqui, Shoaib Ahmed and Binder, Alexander and M{\"u}ller, Emmanuel and Kloft, Marius},
+  booktitle = 	 {Proceedings of the 35th International Conference on Machine Learning},
+  pages = 	 {4393--4402},
+  year = 	 {2018},
+  editor = 	 {Dy, Jennifer and Krause, Andreas},
+  volume = 	 {80},
+  series = 	 {Proceedings of Machine Learning Research},
+  month = 	 {10--15 Jul},
+  publisher =    {PMLR},
+  pdf = 	 {http://proceedings.mlr.press/v80/ruff18a/ruff18a.pdf},
+  url = 	 {https://proceedings.mlr.press/v80/ruff18a.html},
+  abstract = 	 {Despite the great advances made by deep learning in many machine learning problems, there is a relative dearth of deep learning approaches for anomaly detection. Those approaches which do exist involve networks trained to perform a task other than anomaly detection, namely generative models or compression, which are in turn adapted for use in anomaly detection; they are not trained on an anomaly detection based objective. In this paper we introduce a new anomaly detection method—Deep Support Vector Data Description—, which is trained on an anomaly detection based objective. The adaptation to the deep regime necessitates that our neural network and training procedure satisfy certain properties, which we demonstrate theoretically. We show the effectiveness of our method on MNIST and CIFAR-10 image benchmark datasets as well as on the detection of adversarial examples of GTSRB stop signs.}
 }
+
 
 @inproceedings{dey2017gate,
   author    = {Dey, Rahul and Salem, Fathi M.},
@@ -147,26 +152,27 @@
   doi       = {10.1145/3292500.3330672}
 }
 
-@inproceedings{shen2021interfusion,
-  author    = {Shen, Li and Li, Weilun and Liu, Yuxing and Wu, Queng},
-  title     = {InterFusion: Long-Term Anomaly Detection and Diagnosis in Multivariate Time Series via Hierarchical Variational Autoencoder},
-  booktitle = {Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery \& Data Mining},
-  pages     = {1442--1452},
-  year      = {2021}
+@inproceedings{10.1145/3447548.3467075,
+author = {Li, Zhihan and Zhao, Youjian and Han, Jiaqi and Su, Ya and Jiao, Rui and Wen, Xidao and Pei, Dan},
+title = {Multivariate Time Series Anomaly Detection and Interpretation using Hierarchical Inter-Metric and Temporal Embedding},
+year = {2021},
+isbn = {9781450383325},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3447548.3467075},
+doi = {10.1145/3447548.3467075},
+pages = {3220–3230},
+numpages = {11},
+keywords = {anomaly detection, hierarchical structure, inter-metric and temporal embedding, multivariate time series},
+location = {Virtual Event, Singapore},
+series = {KDD '21}
 }
 
-@article{fraunhofer2024qgru,
-  author  = {{Fraunhofer Consortium}},
-  title   = {Quantized Gated Recurrent Unit Variational Autoencoder (Q-GRU-VAE) for Resource-Constrained Industrial Anomaly Detection},
-  journal = {IEEE Transactions on Neural Networks and Learning Systems},
-  year    = {2024}
-}
-
-@techreport{vda5050,
-  author      = {{Verband der Automobilindustrie (VDA)}},
-  title       = {VDA 5050: Specification for AGV Communication Interface (Version 2.1.0)},
-  institution = {Verband der Automobilindustrie e.V.},
-  year        = {2025}
+@article{fährmann2025,
+  author  = {F{\"a}hrmann, Daniel and Ihlefeld, Malte and Kuijper, Arjan and Damer, Naser},
+  title   = {Resource‐Efficient Anomaly Detection in Industrial Control Systems With Quantized Recurrent Variational Autoencoder},
+  year    = {2025},
+  doi     = {10.1049/cim2.70032}
 }
 
 @inproceedings{franke2023vda,
@@ -174,24 +180,27 @@
   title     = {Identification of Requirements and Opportunities for New Types of Standardized Interfaces for AGV Systems Based on the VDA 5050 Concept},
   booktitle = {Logistics Journal: Proceedings (19. Fachkolloquium Logistik der WGTL)},
   volume    = {2023},
-  year      = {2023}
+  year      = {2023},
+  doi       = {10.2195/lj_proc_franke_en_202310_01}
 }
 
 @article{mohna2024medallion,
   author  = {Mohna, Hosne Ara and Barua, Tonmoy},
   title   = {AI-Ready Data Engineering Pipelines: A Review of Medallion Architecture and Cloud-Based Integration Models},
   journal = {ResearchGate Preprint},
-  year    = {2024}
+  year    = {2024},
+  doi     = {10.63125/51kxtf08}
 }
 
 @article{okolnychyi2024iceberg,
   author  = {Okolnychyi, Anton and others},
-  title   = {Row-Level Operations in Apache Iceberg},
+  title   = {Petabyte-Scale Row-Level Operations in Data Lakehouses},
   journal = {Proceedings of the VLDB Endowment (PVLDB)},
   volume  = {17},
   number  = {12},
   pages   = {4159--4162},
-  year    = {2024}
+  year    = {2024},
+  doi     = {10.14778/3685800.3685834},
 }
 
 @article{icebergIncremental2026,
@@ -199,4 +208,47 @@
   title   = {Efficient Incremental Data Modeling in Apache Iceberg-Based Analytical Pipelines: Partitioning and Snapshot Optimization Strategies},
   journal = {Journal of Analytical Data Engineering},
   year    = {2026}
+}
+
+@article{belay2025digital,
+  author    = {Belay, Mohammed Ayalew and Rasheed, Adil and Rossi, Pierluigi Salvo},
+  title     = {Digital Twin-Based Federated Transfer Learning forAnomaly Detection in Industrial IoT},
+  journal   = {IEEE Symposium on Computational Intelligence on Engineering/Cyber Physical Systems (CIES)},
+  year      = {2025},
+  publisher = {IEEE},
+  doi       = {10.1109/CIES64955.2025.11007631}
+}
+
+
+@article{sensors2024synthetic,
+  author    = {Jang, In-Sung and Li, Ki-Joune and Joo, Eun-Oh and Kim, Min-Soo},
+  title     = {Synthetic Training Dataset Generation Using a Digital Twin-based Autonomous Driving Simulator},
+  journal   = {Sensors and Materials},
+  volume    = {36},
+  number    = {9},
+  pages     = {4029--4041},
+  year      = {2024},
+  doi       = {10.18494/SAM5343}
+}
+
+@article{mccourt2024digital,
+  author    = {Mc Court, Killian and authors},
+  title     = {Use Digital Twins to Support Fault Diagnosis From System-Level Condition-Monitoring Data},
+  journal   = {arXiv preprint arXiv:2411.01360},
+  year      = {2024},
+  url       = {https://arxiv.org/abs/2411.01360}
+}
+@article{daan2024pump,
+  title     = {Digital Twin Aided Adversarial Transfer Learning Method for Industrial Fault Diagnosis},
+  journal   = {Journal of Industrial Cyber-Physical Systems},
+  year      = {2024},
+  doi       = {10.1016/j.ress.2023.109152}
+}
+
+@inproceedings{esrel2025fault,
+  title     = {Robot Fault Detection Using Digital Twin and Deep Learning},
+  booktitle = {Proceedings of the European Safety and Reliability Conference (ESREL)},
+  year      = {2025},
+  publisher = {RPS Online},
+  doi       = {10.3850/978-981-94-3281-3_ESREL-SRA-E2025-P9570-cd},
 }
