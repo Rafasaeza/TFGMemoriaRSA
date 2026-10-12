@@ -87,20 +87,27 @@ function Stop-Build([string]$step) {
   exit 1
 }
 
-# Un .aux truncado por dos compilaciones a la vez da "Missing \begin{document}"
-function Test-AuxRace {
-  if ((Test-Path $Log) -and ((Get-Content $Log -Raw) -match 'Missing .begin\{document\}')) {
-    Write-Host '  aviso: main.aux ilegible (compilacion concurrente) -> limpio y reintento'
+# Un .aux truncado (compilacion concurrente o corrida abortada) da
+# "Missing \begin{document}" / "Extra }" al releerlo: limpiar y reintentar.
+function Test-AuxCorrupt {
+  (Test-Path $Log) -and ((Get-Content $Log -Raw) -match 'main\.aux.*: (Missing .begin\{document\}|Extra \}, or forgotten)')
+}
+
+function Invoke-EngineStep([string]$step) {
+  if ((Invoke-Engine) -eq 0) { return }
+  if (Test-AuxCorrupt) {
+    Write-Host '  aviso: main.aux corrupto (compilacion concurrente/abortada) -> limpio y reintento'
     foreach ($e in @('aux','toc','lof','lot','fls','out')) {
       Remove-Item -Force -ErrorAction SilentlyContinue "$Doc.$e"
     }
-    if ((Invoke-Engine) -ne 0) { Stop-Build 'xelatex tras limpiar .aux' }
+    if ((Invoke-Engine) -ne 0) { Stop-Build "$step (tras limpiar .aux)" }
+  } else {
+    Stop-Build $step
   }
 }
 
 Write-Host '  -> xelatex (1/3)'
-if ((Invoke-Engine) -ne 0) { Stop-Build 'xelatex (1/3)' }
-Test-AuxRace
+Invoke-EngineStep 'xelatex (1/3)'
 
 Write-Host '  -> biber (bibliografia)'
 if ((Invoke-Cmd -Exe $Biber -ToolLog 'build.biber.log' -Arguments $Doc) -ne 0) {
@@ -119,12 +126,10 @@ if ($MakeIndex) {
 }
 
 Write-Host '  -> xelatex (2/3)'
-if ((Invoke-Engine) -ne 0) { Stop-Build 'xelatex (2/3)' }
-Test-AuxRace
+Invoke-EngineStep 'xelatex (2/3)'
 
 Write-Host '  -> xelatex (3/3)'
-if ((Invoke-Engine) -ne 0) { Stop-Build 'xelatex (3/3)' }
-Test-AuxRace
+Invoke-EngineStep 'xelatex (3/3)'
 
 if (-not (Test-Path "$Doc.pdf")) { Stop-Build 'no se genero main.pdf' }
 

@@ -56,19 +56,26 @@ abort() {
   exit 1
 }
 
-# Un .aux truncado por dos compilaciones a la vez da "Missing \begin{document}"
-check_aux_race() {
-  if grep -q "Missing .begin{document}" "$LOG"; then
-    echo "  aviso: main.aux ilegible (compilación concurrente) -> limpio y reintento"
+step() { printf '  -> %s\n' "$1"; }
+
+# Un .aux truncado por dos compilaciones a la vez (o una corrida abortada)
+# da "Missing \begin{document}" / "Extra }" al releerlo: limpiar y reintentar.
+aux_error() { grep -qE "main\.aux.*: (Missing .begin\{document\}|Extra \}, or forgotten)" "$LOG"; }
+
+engine_step() {
+  run_engine && return 0
+  if aux_error; then
+    echo "  aviso: main.aux corrupto (compilación concurrente/abortada) -> limpio y reintento"
     rm -f "$DOC".{aux,toc,lof,lot,fls,out}
-    run_engine || abort "xelatex tras limpiar .aux"
+    run_engine || abort "$1 (tras limpiar .aux)"
+  else
+    abort "$1"
   fi
 }
 
 step() { printf '  -> %s\n' "$1"; }
 
-step "xelatex (1/3)";            run_engine || abort "xelatex (1/3)"
-check_aux_race
+step "xelatex (1/3)";            engine_step "xelatex (1/3)"
 step "biber (bibliografía)";     "$BIBER" "$DOC" >"$LOG.biber" 2>&1 \
                                    || { tail -20 "$LOG.biber"; abort "biber (revisa references.bib)"; }
 step "makeindex (nomenclatura)"
@@ -78,10 +85,8 @@ if [ -n "$MAKEINDEX" ]; then
 else
   echo "  aviso: no hay makeindex, la nomenclatura no se regenerará"
 fi
-step "xelatex (2/3)";            run_engine || abort "xelatex (2/3)"
-check_aux_race
-step "xelatex (3/3)";            run_engine || abort "xelatex (3/3)"
-check_aux_race
+step "xelatex (2/3)";            engine_step "xelatex (2/3)"
+step "xelatex (3/3)";            engine_step "xelatex (3/3)"
 
 [ -f "$DOC.pdf" ] || abort "no se generó $DOC.pdf"
 
