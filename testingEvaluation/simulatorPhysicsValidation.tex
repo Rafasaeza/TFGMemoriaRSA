@@ -172,14 +172,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     $0.025~\mathrm{g}$. At the cruise speed of $1.0~\mathrm{m/s}$ the expected value is
     $0.02 + 0.15 \times 1.0 = 0.17~\mathrm{g}$, about $1.7~\mathrm{m/s^2}$, and the
     reading has to be interpreted as a distribution around that mean rather than as a
-    level: single samples between $0.12$ and $0.22~\mathrm{g}$ are normal, and a value
-    of $0.206~\mathrm{g}$ corresponds to $1.4$ standard deviations above the mean, which
-    is expected in roughly one sample out of thirteen. The assertion is therefore made on
-    the mean level and on the timing, not on individual samples. The level jumps from a
-    $0.02~\mathrm{g}$ idle floor to a $0.17~\mathrm{g}$ mean with the same two-second
-    delay as the speed, never before it, because the excitation of the model is the speed
-    made good over the ground and not the velocity command: an AGV whose wheels are
-    commanded but which does not advance must not show cruising vibration.
+    level: single samples between $0.12$ and $0.22~\mathrm{g}$ are normal-
 
     \physfig{vibration_rise_arranque}{Chassis RMS vibration: $0.02~\mathrm{g}$ idle
     floor at standstill and a $0.17~\mathrm{g}$ mean, with the $0.025~\mathrm{g}$
@@ -236,21 +229,30 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     collapsing to the ambient in one or two seconds would mean that the thermal state is
     being overwritten instead of integrated.
 
-    \physfig{temperature_godown}{Cooling of the winding after the mission ends: from
-    $35.1$ to $22.15~^{\circ}\mathrm{C}$ with a fitted time constant of
-    $208~\mathrm{s}$, indistinguishable from the $211~\mathrm{s}$ of the heating branch,
-    and with a residual equal to the noise of the thermistor.}
+    \physfig{temperature_godown}{Winding and pack temperature over a complete mission.
+    The cooling of the winding goes from $35.1$ to $22.15~^{\circ}\mathrm{C}$ with a
+    fitted time constant of $208~\mathrm{s}$, indistinguishable from the $211~\mathrm{s}$
+    of the heating branch and with a residual equal to the noise of the thermistor, while
+    the pack channel stays close to the ambient along the whole record.}
 
     \item \textbf{The battery node is deliberately sluggish.}
-    The pack temperature barely moves over several minutes, by a few tenths of a degree.
-    This is expected and must not be mistaken for a defect: the pack node has a heat
-    capacity of $900~\mathrm{J/K}$ against $80~\mathrm{J/K}$ for the winding and is
-    heated only by $I_{\mathrm{bat}}^2 R_{\mathrm{int}}$, which is small at cruise. Its
-    slow drift is nevertheless relevant because the internal resistance of the battery
-    depends on temperature.
-
-    \physfig{simval-thermal-battery}{Winding and pack temperature on the same axis: the
-    pack node responds one order of magnitude more slowly than the winding.}
+    The pack is a second, far more inert thermal node: its time constant is
+    $R_{\mathrm{bat}} C_{\mathrm{bat}} = 8 \times 900 = 7200~\mathrm{s}$, one hour and
+    fifty minutes against the $200~\mathrm{s}$ of the winding, and its only heat source is
+    $I_{\mathrm{bat}}^2 R_{\mathrm{int}}$, which at the cruise current amounts to
+    $0.32~\mathrm{W}$ and therefore to an equilibrium only $2.6~\mathrm{K}$ above the
+    ambient. Eleven minutes of travel cover $1 - e^{-660/7200} = 8.8~\%$ of that span, so
+    the expected drift is $+0.23~\mathrm{K}$, and the historian shows exactly that: from
+    $22.02$ to $22.25~^{\circ}\mathrm{C}$ along the reference mission, followed by an
+    equally slow retreat towards the ambient once the drive is switched off, visible in
+    \Cref{fig:temperature_godown} as the nearly flat lower trace. The comparison between
+    both channels is the assertion: a pack rising by several kelvin in a few minutes would
+    mean the two nodes are exchanged or that the losses are injected in the wrong place,
+    and a pack frozen at a constant value would mean the thermal state of the battery is
+    not being integrated. The drift matters beyond its own check because the internal
+    resistance of the pack is temperature dependent, so those $2.6~\mathrm{K}$ reduce the
+    ohmic sag of the terminal voltage by roughly $2.4~\%$ over a long mission, and because
+    it is the quantity on which the thermal degradation of the pack has to be judged.
 \end{enumerate}
 
 \subsection{Braking and Node Arrival}
