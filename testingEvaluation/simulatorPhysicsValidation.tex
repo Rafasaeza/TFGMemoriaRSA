@@ -1,0 +1,353 @@
+% !TeX root = ../main.tex
+% Placeholder reused by every check of this section. Drop the screenshot at
+% figures/simValidationCaptureRun.png and all the figures of the section update at
+% once; while the file is missing, the example-image shipped with the mwe package is
+% typeset instead so the document keeps compiling.
+\newcommand{\physfig}[2]{%
+  \par\vspace{6pt}%
+  \begin{center}%
+    \IfFileExists{figures/#1.png}{%
+      \includegraphics[width=0.85\linewidth]{#1}%
+    }{%
+      \includegraphics[width=0.85\linewidth]{example-image}%
+    }\\[2pt]%
+    \captionof{figure}{#2}\label{fig:#1}%
+  \end{center}%
+  \vspace{2pt}%
+}
+
+The simulator described in Section~\ref{sec:training_set} replaces heuristic signal
+generation with an explicit powertrain model: an armature circuit, a torque balance
+referred to the motor shaft, a lumped thermal node for the winding, a battery with an
+equivalent-circuit terminal voltage and a set of transducers that inject noise,
+quantisation and drift into every published channel. Introducing that model raises a
+question that unit tests alone cannot answer: whether the telemetry that finally
+reaches the historian still \emph{looks} like the physical system it claims to
+represent.
+
+\textbf{Nature of this test.} The checks collected in this section are
+\emph{functional, informational tests} executed by \textbf{manual inspection} of the
+telemetry rendered in the Grafana dashboards. They are not automated tests, they are
+not executed by a CI/CD pipeline, they produce no pass/fail artefact and they are not
+regression protected: every run is observed, interpreted and archived by hand. Their
+purpose is evidential rather than verificational, to show a reader of the thesis that
+the simulated signals reproduce the qualitative and quantitative behaviour expected
+from the electromechanical model, so that the anomalies synthesised later on can be
+argued to be physically plausible and not artefacts of arbitrary signal shaping. The
+deterministic arithmetic of the model (torque equilibrium, back-EMF, energy balance,
+sensor conditioning, fault signatures) is instead covered by the automated Rust test
+suite of the simulator, which is executed on every build and is the appropriate
+instrument for that class of assertions. This section therefore complements, and does
+not replace, the automated tests.
+
+\subsection{Test Environment and Procedure}
+
+All observations were taken from the deployed stack: the simulated fleet publishes one
+VDA~5050 \texttt{state} message per robot and second, which travels through the MQTT broker
+through Telegraf and Kafka Connect into the QuestDB table \texttt{vda5050\_state}, where
+the Grafana dashboards \textit{VDA5050 Powertrain Physics}, \textit{VDA5050 Injected
+Faults}, \textit{VDA5050 Robot Dashboard}, \textit{VDA5050 Robot Velocity} and
+\textit{VDA5050 Robot Vibration} read them. The state publication rate of one hertz is
+the effective sampling rate of every observation reported below and sets the limit of
+what can be seen.
+
+The reference stimulus is a single long mission issued with the \textbf{Capture run
+(long straight)} control-panel action, which builds a straight unloaded route towards
+the positive x direction with a node every 60 m, sized from the configured cruise speed
+so that the vehicle remains at cruise for roughly eleven minutes. A straight, unloaded
+path is deliberate: it keeps the lateral and angular velocity at zero, so the only
+events visible in the plots are the repeated acceleration ramps produced by the nodes
+and the slower thermal and electrochemical ramps that accumulate behind them. Each
+check below states what has to be observed and the value measured in the reference run;
+the figure that follows every check is the corresponding panel of the dashboard.
+
+Two conventions have to be kept in mind when reading the numbers, because without them
+two of the published channels appear inconsistent with the model. First, the current
+transducer is a hall-effect sensor clamped on the DC side of the drive, so the published
+\texttt{motor\_current} is the armature current plus the standby draw of the drive
+itself, denoted $I_{\mathrm{q}} = 0.35~\mathrm{A}$; the torque-producing current is
+therefore $I_{\mathrm{m}} = \texttt{motor\_current} - I_{\mathrm{q}}$, and the torque
+channel is consistent with the current channel only after that subtraction. Second, the
+published \texttt{motor\_voltage} is the DC-link, that is, the battery terminal
+voltage, and not the voltage that the converter applies to the armature, which is the
+lower quantity appearing in Equation~\eqref{eq:motor_voltage}; combining the published
+voltage with the published back-EMF and armature resistance would otherwise seem to
+violate that equation by about four volts. Throughout this section, \emph{armature
+current} refers to \texttt{motor\_current} and \emph{pack current} refers to
+\texttt{battery\_current\_a}, which are two different channels.
+
+\subsection{Start-Up and Cruise}
+
+\begin{enumerate}
+    \item \textbf{Current peak during acceleration, followed by a cruise plateau.}
+    Issuing the order produces an armature current, \texttt{motor\_current}, of
+    approximately $8.6~\mathrm{A}$ lasting two seconds, after which the signal settles
+    on a plateau of about $3.3~\mathrm{A}$ that it does not leave while the vehicle
+    travels at cruise. The pack current, \texttt{battery\_current\_a}, traces the
+    same profile at a lower amplitude, the ratio between the two channels not being
+    constant because it depends on the voltage the converter applies to the armature, as
+    discussed in the battery subsection. The peak is the accelerating
+    load of Equation~\eqref{eq:torque_balance}: the vehicle goes from $0$ to
+    $1.0~\mathrm{m/s}$ at $0.5~\mathrm{m/s^2}$, and both the inertial and the rolling
+    terms of the load torque are paid for with armature current. The plateau is the same
+    equation with the inertial term cancelled. This two-second profile is not
+    the electrical transient of the machine: the armature circuit has an inductance and a
+    resistance whose quotient, $L_{\mathrm{a}}/R_{\mathrm{a}} \approx 40~\mathrm{ms}$,
+    is the time the current needs to reach the value demanded by the drive. That interval
+    is twenty-five times shorter than the one second between samples, so the transient is
+    completed inside a single sample and cannot appear in the plot; its absence is a
+    property of the sampling rate, not evidence that the armature inductance is missing
+    from the model.
+
+    \physfig{armature_current_and_bus_voltage_arranque_crucero}{Armature current at start-up: an approximately
+    $8.6~\mathrm{A}$ peak during the two-second acceleration ramp followed by a
+    $3.3~\mathrm{A}$ cruise plateau.}
+
+    \item \textbf{Motor speed reaching the value imposed by the transmission.}
+    The measured speed goes from $0$ to $100~\mathrm{rad/s}$ in the same two seconds and
+    then stays flat. The value of the plateau is the relevant evidence, not its shape:
+    it is $\omega_{\mathrm{m}} = i_{\mathrm{g}}\, v / r_{\mathrm{w}} = 10 \times
+    1.0~\mathrm{m/s}\,/\,0.10~\mathrm{m} = 100~\mathrm{rad/s}$: the wheel turns at
+    $10~\mathrm{rad/s}$ and the gearbox multiplies that speed by ten, which is the
+    kinematic relation stated in Section~\ref{sec:training_set}. A plateau at any other
+    value would mean that the wheel radius or the gearbox ratio published in the
+    configuration is not the one the model uses.
+
+    \physfig{motor_speed_back_EMF_arranque_crucero}{Motor angular velocity and back-EMF during start-up and cruise: the speed reaches
+    $100~\mathrm{rad/s}$ in two seconds, and the back-EMF reaches $19.00~\mathrm{V}$ during cruise.}
+
+    \item \textbf{Back-electromotive force proportional to speed.}
+    As soon as the speed reaches its plateau, \texttt{back\_emf\_v} sticks to
+    $19.00~\mathrm{V}$. The check consists of dividing the reported quantity by
+    $K_{\mathrm{e}} \omega_{\mathrm{m}}$: the measured ratio is $1.0001$, that is,
+        Equation~\eqref{eq:motor_back_emf} holds with the configured constant and is not
+    being emulated from a different quantity. This observation is supported by the same
+    panel used for the speed check, \Cref{fig:motor_speed_back_EMF_arranque_crucero}.
+
+    \item
+ \textbf{Torque consistent with current after removing the standby draw.}
+    The reported torque has to satisfy $\tau_{\mathrm{m}} = K_{\mathrm{t}}
+    (I_{\mathrm{m}} - I_{\mathrm{q}})$; at the measured cruise current of
+    $3.33~\mathrm{A}$ this yields $0.57~\mathrm{N\,m}$, which is the value on the plot.
+    Subtracting $I_{\mathrm{q}}$ is not a correction applied after the fact: the
+    Hall-effect transducer of the model sees the standby consumption of the drive
+    together with the armature current, so a torque computed from the raw current would
+    be systematically biased. This is the discrete counterpart of
+    Equation~\eqref{eq:electromagnetic_torque}.
+
+    \physfig{motor_torque_crucero}{Electromagnetic torque against armature current. The slope
+    matches $K_{\mathrm{t}}$ once the $0.35~\mathrm{A}$ standby draw of the drive is
+    removed from the measured current.}
+
+    \item \textbf{Shaft power equal to torque times speed.}
+    The power channel reads about $57~\mathrm{W}$ at cruise, which is
+    $0.57~\mathrm{N\,m} \times 100~\mathrm{rad/s}$. This closes the energy chain between
+    the mechanical and the electrical channels and rules out that power is generated
+    independently from torque and speed, as shown in
+    \Cref{fig:motor_torque_crucero}.
+
+    \item \textbf{Current is a band, not a line.}
+    The cruise armature
+    current, \texttt{motor\_current}, is a band of roughly $\pm 0.08~\mathrm{A}$ around
+    its $3.3~\mathrm{A}$ plateau; the standard deviation measured over the reference run
+    is $0.082~\mathrm{A}$ against the $0.08~\mathrm{A}$ configured for the current
+    transducer, the small excess being the twelve-bit quantisation of an eighty-ampere
+    range, one least significant bit being $19.5~\mathrm{mA}$. This is the evidence that the sensor
+    conditioning layer (Gaussian noise, analogue-to-digital conversion and drift) is
+    active on the published signal. Two opposite defects are ruled out at once: a band
+    clearly wider than configured, which would indicate that fault ripple or a wrong
+    noise scale is leaking into healthy data, and a perfectly straight line, which would
+    mean the conditioning layer has been bypassed and the training set would be
+    unrealistically clean, as observed in
+    \Cref{fig:armature_current_and_bus_voltage_arranque_crucero}.
+
+    \item \textbf{Vibration rises with travel, not with command.}
+    The channel reports the root-mean-square acceleration of the chassis in units of
+    $g$, the scalar an accelerometer with an internal RMS stage publishes for each
+    measuring window; the waveform itself does not travel in the state message. In the
+    model that scalar is driven by the quantities that excite the chassis: an idle floor
+    of $0.02~\mathrm{g}$, a rolling term of $0.15~\mathrm{g}$ per $\mathrm{m/s}$ of
+    speed actually made good over the ground, the fault-driven terms described in
+    Section~\ref{sec:training_set} and the noise of the transducer, with a dispersion of
+    $0.025~\mathrm{g}$. At the cruise speed of $1.0~\mathrm{m/s}$ the expected value is
+    $0.02 + 0.15 \times 1.0 = 0.17~\mathrm{g}$, about $1.7~\mathrm{m/s^2}$, and the
+    reading has to be interpreted as a distribution around that mean rather than as a
+    level: single samples between $0.12$ and $0.22~\mathrm{g}$ are normal, and a value
+    of $0.206~\mathrm{g}$ corresponds to $1.4$ standard deviations above the mean, which
+    is expected in roughly one sample out of thirteen. The assertion is therefore made on
+    the mean level and on the timing, not on individual samples. The level jumps from a
+    $0.02~\mathrm{g}$ idle floor to a $0.17~\mathrm{g}$ mean with the same two-second
+    delay as the speed, never before it, because the excitation of the model is the speed
+    made good over the ground and not the velocity command: an AGV whose wheels are
+    commanded but which does not advance must not show cruising vibration.
+
+    \physfig{vibration_rise_arranque}{Chassis RMS vibration: $0.02~\mathrm{g}$ idle
+    floor at standstill and a $0.17~\mathrm{g}$ mean, with the $0.025~\mathrm{g}$
+    dispersion of the transducer, while travelling; the rise follows the speed.}
+\end{enumerate}
+
+\subsection{Thermal Behaviour}
+
+\begin{enumerate}
+    \item \textbf{Winding temperature rises with a curve towards a predictable
+    equilibrium.}
+    The winding starts at the ambient temperature of $22.0~^{\circ}\mathrm{C}$ and climbs
+    to $35.1~^{\circ}\mathrm{C}$ along the seven hundred seconds of travel of the
+    reference run. The quantity that has to be evaluated is neither the average slope,
+    which depends on how much of the curve was recorded, nor the peak value, but the pair
+    formed by the time constant and the asymptote. Fitting the response of a first-order
+    node, $T(t) = T_{\infty} + (T_0 - T_{\infty})\,e^{-(t-t_0)/\tau_{\mathrm{th}}}$,
+    to the samples stored in the historian yields $\tau_{\mathrm{th}} = 211~\mathrm{s}$
+    and $T_{\infty} = 35.6~^{\circ}\mathrm{C}$, with a residual dispersion of
+    $0.05~\mathrm{K}$, which is the noise of the thermistor and nothing else. Both fitted
+    parameters correspond to an expression of the model: the time constant is
+    $R_{\mathrm{th}} C_{\mathrm{th}} = 2.5 \times 80 = 200~\mathrm{s}$, and the
+    asymptote is the ambient temperature plus the dissipated power times the thermal
+    resistance, $22.0 + 5.4 \times 2.5 = 35.5~^{\circ}\mathrm{C}$, for the
+    $0.45~\mathrm{W}$ of copper loss and $5.0~\mathrm{W}$ of iron loss of this operating
+    point. The criterion that can be applied by hand on the panel is the sixty-three
+    percent rule: the temperature has to have covered $0.63 \times 13.6 = 8.6~\mathrm{K}$
+    of the $13.6~\mathrm{K}$ span after one time constant, which means crossing
+    $30.6~^{\circ}\mathrm{C}$ two hundred seconds after the drive is loaded. A rise that
+    were linear, or that reached its plateau within one or two samples, would invalidate
+    the thermal node.
+
+    \physfig{temperature_meseta}{Winding temperature during the capture run: exponential
+    rise from the ambient $22.0~^{\circ}\mathrm{C}$ to $35.1~^{\circ}\mathrm{C}$, with
+    a fitted time constant of $211~\mathrm{s}$ and a fitted asymptote of
+    $35.6~^{\circ}\mathrm{C}$ against the $35.5~^{\circ}\mathrm{C}$ predicted by
+    $T_{\mathrm{amb}} + P R_{\mathrm{th}}$.}
+
+    \item \textbf{Cooling with the same exponent, not with the mirror curve.}
+    Heating and cooling are not mirror images and must not be compared by eye: the heating
+    branch approaches the equilibrium of the operating point, $35.5~^{\circ}\mathrm{C}$,
+    whereas the cooling branch approaches the ambient $22.0~^{\circ}\mathrm{C}$, where
+    no loss is being generated, so the two have different asymptotes and the piece
+    of each one that appears on the panel depends on how long the vehicle ran. What has to
+    be identical in both directions is the exponent. Once the order is finished, the
+    temperature falls from $35.1$ to $22.15~^{\circ}\mathrm{C}$ in twenty-two minutes,
+    and the same fit returns $\tau_{\mathrm{th}} = 208~\mathrm{s}$ against the
+    $211~\mathrm{s}$ of the heating branch, with the same $0.05~\mathrm{K}$ residual: one
+    single lumped node losing heat through a fixed resistance heats and cools with the same
+    time constant in both directions, as it must. Without fitting, the equivalent criterion
+    is that after one time constant the cooling has covered $63~\%$ of the distance to the
+    ambient, near $26.9~^{\circ}\mathrm{C}$, and that the logarithm of that distance is a
+    straight line of slope $-1/\tau_{\mathrm{th}}$ on both branches. A temperature
+    collapsing to the ambient in one or two seconds would mean that the thermal state is
+    being overwritten instead of integrated.
+
+    \physfig{temperature_godown}{Cooling of the winding after the mission ends: from
+    $35.1$ to $22.15~^{\circ}\mathrm{C}$ with a fitted time constant of
+    $208~\mathrm{s}$, indistinguishable from the $211~\mathrm{s}$ of the heating branch,
+    and with a residual equal to the noise of the thermistor.}
+
+    \item \textbf{The battery node is deliberately sluggish.}
+    The pack temperature barely moves over several minutes, by a few tenths of a degree.
+    This is expected and must not be mistaken for a defect: the pack node has a heat
+    capacity of $900~\mathrm{J/K}$ against $80~\mathrm{J/K}$ for the winding and is
+    heated only by $I_{\mathrm{bat}}^2 R_{\mathrm{int}}$, which is small at cruise. Its
+    slow drift is nevertheless relevant because the internal resistance of the battery
+    depends on temperature.
+
+    \physfig{simval-thermal-battery}{Winding and pack temperature on the same axis: the
+    pack node responds one order of magnitude more slowly than the winding.}
+\end{enumerate}
+
+\subsection{Braking and Node Arrival}
+
+\begin{enumerate}
+    \item \textbf{Current falls to the standby value during braking, never below it.}
+    As the vehicle approaches a node, the reported longitudinal velocity ramps down and
+    the armature current drops from $3.3~\mathrm{A}$ to about $0.33~\mathrm{A}$, the
+    standby draw of the drive, in a single sample. The sign is what has to be checked:
+    the current must not become negative. The model does not implement regenerative
+    braking, so deceleration dissipates energy mechanically and the drive simply stops
+    demanding torque. A negative current on this plot would therefore be a defect, not a
+    feature.
+
+    \physfig{current_goes_down_break}{Velocity and armature current at node arrival: the
+    current returns to the standby level and never crosses into negative values.}
+
+    \item \textbf{Vibration and DC-link voltage recover in the same second.}
+    The vibration returns to the $0.02~\mathrm{g}$ idle floor, mean value and same
+    dispersion as above, in the same second in which the velocity reaches zero, because
+    the excitation of the accelerometer model is the speed made good over the ground. The
+    DC-link voltage also steps back up as soon as the load is removed, but this second
+    recovery is not legible on the raw trace and should not be looked for there: the
+    magnitude of the step is $120~\mathrm{mV}$, whereas the accelerated discharge moves
+    the open-circuit voltage of the pack by $53~\mathrm{mV}$ for every minute of travel,
+    in the same direction before and after the stop, so the load step is buried under a
+    trend four times faster than itself.
+
+    \physfig{vibration_reach_default_break}{Vibration and DC-link voltage at standstill
+    recovery. The vibration collapses to its idle floor in one sample; the voltage
+    recovery of $120~\mathrm{mV}$ is masked by the $53~\mathrm{mV}$ per minute decline of
+    the open-circuit voltage.}
+\end{enumerate}
+
+\subsection{Battery}
+
+\begin{enumerate}
+    \item \textbf{State of charge decreases linearly.}
+    The state of charge follows a straight ramp downwards of about two percent per
+    minute; the reference run consumed $7.5~\%$ in three minutes. The slope is constant
+    because the cruise current is constant and the charge is integrated by Coulomb
+    counting, and because the discharge rate used in the demonstration configuration is
+    accelerated by an intentional factor of twenty to make a mission-sized drain visible
+    in a few minutes of observation. That factor multiplies elapsed time only, so it
+    changes how fast the ramp runs but not its linearity, and it must be reported
+    together with the slope whenever the value is quoted.
+
+    \physfig{battery_linear_discharge}{State of charge during the capture run: linear discharge ramp,
+    measured with the accelerated demo discharge factor enabled.}
+
+    \item \textbf{Battery current is lower than armature current.}
+    The pack delivers $2.90~\mathrm{A}$ while the armature carries $3.33~\mathrm{A}$.
+    The ratio of about $0.8$ is the consequence of the converter: the armature is fed at
+    a voltage lower than the DC-link, so the current drawn from the pack is reduced by
+    approximately the same factor; the residual difference is the auxiliary consumption
+    of the on-board electronics and the standby draw of the drive, $0.50~\mathrm{A}$ in
+    the configuration used, which flows from the pack without passing through the
+    armature. The ratio is therefore load dependent: it approaches one at high speed,
+    when the converter applies nearly the full bus voltage to the armature, and it
+    becomes much smaller during a start-up, when the armature voltage is low. A ratio close to one, or a battery current larger than the
+    armature current while travelling, would break the energy balance of the model.
+
+    \physfig{battery_current_lower_motor_current}{Battery current against armature current during
+    cruise; the ratio reflects the converter voltage transformation plus the auxiliary
+    consumption.}
+
+    \item \textbf{Terminal voltage is consistent with the equivalent circuit.}
+    Equation~\eqref{eq:battery_ecm} implies a drop of about $150~\mathrm{mV}$ from the
+    open-circuit value at the cruise current of $2.96~\mathrm{A}$, and therefore a step of
+    about $120~\mathrm{mV}$ between the loaded and the unloaded level. That step is not
+    legible on the raw trace and no figure is offered for it: the accelerated discharge of
+    the demonstration configuration drags the open-circuit voltage downwards at
+    $53~\mathrm{mV}$ per minute of travel, four times faster than the step itself and
+    undisturbed by the switching of the drive, so recovering the identity from the panels
+    would require compensating the state of charge analytically. The arithmetic of the
+    equivalent circuit, including the relaxation of the polarisation branch with the time
+    constant $R_{\mathrm{p}} C_{\mathrm{p}} = 300~\mathrm{s}$, is asserted in the
+    automated test suite of the simulator, which exercises the battery model directly, and
+    is deliberately left out of the manual inspection reported here.
+\end{enumerate}
+
+\subsection{Interpretation and Limitations}
+
+The values quoted above are consistency checks against the model, not metrological
+measurements: every one of them is conditioned by the calibration constants published in
+the simulator configuration, and they hold for the operating point described, a
+one-hundred-and-eighty-kilogram vehicle travelling unloaded on level ground at
+$1.0~\mathrm{m/s}$. Changing the payload, the grade or the speed moves the numerical
+values while leaving the relations intact, which is precisely the property the checks
+exercise.
+
+The one hertz publication interval also bounds the scope of the section. Electromagnetic
+transients of tens of milliseconds, the ripple harmonics injected by the stator
+short-circuit fault, and the slow drift of the thermistor and the current transducer,
+specified in fractions of a degree or a percent per hour, are outside what can be
+observed here; they are asserted deterministically in the automated test suite of the
+simulator instead. This section is consequently an informational, human-reviewed
+characterisation of the simulated telemetry, whose role in this work is to justify that
+the data on which the anomaly detection models are trained and evaluated behaves like a
+powertrain.
