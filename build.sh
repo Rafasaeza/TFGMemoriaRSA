@@ -60,7 +60,7 @@ step() { printf '  -> %s\n' "$1"; }
 
 # Un .aux truncado por dos compilaciones a la vez (o una corrida abortada)
 # da "Missing \begin{document}" / "Extra }" al releerlo: limpiar y reintentar.
-aux_error() { grep -qE "main\.aux.*: (Missing .begin\{document\}|Extra \}, or forgotten)" "$LOG"; }
+aux_error() { grep -qE "main\.aux.*: (Missing .begin\{document\}|Extra \}, or forgotten|File ended while scanning)|\\\\@firstoffive" "$LOG"; }
 
 engine_step() {
   run_engine && return 0

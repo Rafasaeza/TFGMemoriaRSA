@@ -1,0 +1,181 @@
+% !TeX root = ../main.tex
+\section{Synthetic Dataset Generation}
+\label{sec:synthetic_dataset_generation}
+
+The original \texttt{vda5050\_vehicle\_simulator} provides operational AGV state information compliant with the VDA 5050 standard. However, these messages do not contain the detailed electromechanical telemetry required to train anomaly detection models. To address this limitation, the simulator was extended with a physical telemetry generation layer capable of computing motor, battery, thermal, and drivetrain variables. The objective was to generate realistic telemetry streams preserving the physical relationships between electrical, mechanical, and thermal quantities typically observed in industrial AGV systems.
+
+The generated telemetry is embedded into the VDA 5050 \texttt{information} field and published together with the standard AGV state message. Listing~\ref{lst:vda5050-telemetry} illustrates an example of the generated telemetry payload. The additional telemetry variables incorporated into the simulator are:
+
+\begin{itemize}
+    \item Motor current ($I_m$)
+    \item Motor voltage ($V_m$)
+    \item Motor temperature ($T_m$)
+    \item Motor angular velocity ($\omega_m$)
+    \item Motor torque ($\tau_m$)
+    \item Back-electromotive force ($E_b$)
+    \item Motor electrical power
+    \item Battery current ($I_{bat}$)
+    \item Battery voltage ($V_{bat}$)
+    \item State of Charge (SOC)
+    \item State of Health (SOH)
+    \item Battery temperature ($T_{bat}$)
+    \item Wheel slip ratio
+    \item Vibration RMS
+\end{itemize}
+
+These variables were selected because they are commonly used in predictive maintenance, condition monitoring, and fault diagnosis applications for electrically driven industrial vehicles. 
+
+The extension of the original \texttt{vda5050\_vehicle\_simulator} required the implementation of additional electromechanical, thermal, and battery modelling capabilities. Since the simulator adaptation itself was not the primary research objective of this work, modern AI-assisted software engineering techniques were employed to accelerate development. 
+
+Specifically, Anthropic Claude Sonnet 5 was used as an AI programming assistant during the design and implementation of the telemetry generation module. The model was provided with detailed requirements regarding the desired physical behaviour, software architecture, VDA 5050 compatibility constraints, and telemetry channels to be incorporated into the simulator. 
+
+The prompt was formulated as a software specification document describing the required equations, architectural constraints, data structures, fault scenarios, and expected deliverables. An excerpt of the prompt is shown below. 
+
+The generated code was not incorporated directly into the project. Instead, all outputs were manually reviewed, adapted, validated, and tested before integration into the final simulator implementation.
+
+
+\begin{promptbox}
+\textbf{\# Complete Sensor Adaptation Prompt}
+
+\textbf{\#\# Role \& Objective}
+
+You are an expert Systems \& Robotics Engineer proficient in Rust (async Tokio, Serde, MQTT) and physical powertrain simulation. Your task is to extend the \texttt{bekirbostanci/vda5050\_vehicle\_simulator} repository by implementing a high-fidelity physical telemetry, dynamics, and fault-injection module.
+
+\textbf{\#\# 1. Context \& Architecture Requirements}
+
+\begin{itemize}
+    \item \textbf{Target Repository}: \texttt{bekirbostanci/vda5050\_vehicle\_simulator} (written in Rust).
+    \item \textbf{Configuration Integration}: Extend the \texttt{config.toml} file to support physical motor, battery, thermal, and sensor parameters alongside existing VDA 5050 parameters.
+    \item \textbf{Protocol \& Messaging}: Maintain compatibility with VDA 5050 MQTT state messages (updating \texttt{batteryState}, \texttt{velocity}, \texttt{error} fields, and extended telemetry payloads) published at configurable frequencies (\texttt{state\_frequency}).
+\end{itemize}
+
+\textbf{\#\# 2. Physical Telemetry Channels \& Equations}
+
+Implement an internal physics loop running within a dedicated async task or thread to calculate the dynamic state of the powertrain:
+
+\textbf{\#\#\# Motor Armature \& Torque Balance}
+\[
+    V_m(t) = R_a(T_m) \cdot I_m(t) + L_a \frac{dI_m(t)}{dt} + K_e \cdot \omega_m(t)
+\]
+\[
+    \tau_m(t) = K_t \cdot I_m(t)
+\]
+\[
+    J_m \frac{d\omega_m(t)}{dt} + B_m \cdot \omega_m(t) = \tau_m(t) - \frac{\tau_L(t)}{\eta_g \cdot i_g}
+\]
+where:
+\[
+    \tau_L(t) = r_w \cdot (C_{rr} \cdot m_{\mathit{total}} \cdot g \cdot \cos\theta + m_{\mathit{total}} \cdot a(t) + m_{\mathit{total}} \cdot g \cdot \sin\theta + F_{\mathit{drawbar}})
+\]
+
+\textbf{\#\#\# Kinematics \& Wheel Slip}
+\[
+    v(t) = \frac{\omega_m(t)}{i_g} \cdot r_w \cdot (1 - s(t))
+\]
+
+\textbf{\#\#\# Thermal Dissipation Model}
+\[
+    R_a(T_m) = R_{a0} \cdot [1 + \alpha(T_m - T_0)]
+\]
+\[
+    C_{th} \frac{dT_m(t)}{dt} = I_m(t)^2 R_a(T_m) + C_{fe} \omega_m(t)^{1.6} B_{\max}^2 - \frac{T_m(t) - T_{\mathit{amb}}}{R_{th}}
+\]
+
+\textbf{\#\#\# Battery 1-RC Equivalent Circuit Model (ECM)}
+\[
+    V_{\mathit{bat}}(t) = V_{\mathit{ocv}}(\mathit{SOC}) - I_{\mathit{bat}}(t) R_{\mathit{int}}(\mathit{SOC}, T_{\mathit{bat}}) - V_{\mathit{pol}}(t)
+\]
+\[
+    \frac{dV_{\mathit{pol}}(t)}{dt} = -\frac{V_{\mathit{pol}}(t)}{R_p C_p} + \frac{I_{\mathit{bat}}(t)}{C_p}
+\]
+
+\textbf{\#\# 3. Rust Implementation Strategy}
+
+\begin{itemize}
+    \item \textbf{Modular Design}: Create new Rust modules under \texttt{src/physics/} (e.g., \texttt{motor.rs}, \texttt{battery.rs}, \texttt{thermal.rs}) and \texttt{src/faults.rs}.
+    \item \textbf{Serde Data Structures}: Derive \texttt{Serialize} and \texttt{Deserialize} on structs for reading \texttt{config.toml} settings and mapping telemetry data into VDA 5050 JSON structures.
+    \item \textbf{Noise \& Transducers}: Implement Gaussian white noise, ADC quantization, and thermistor/encoder drift using the \texttt{rand} crate.
+\end{itemize}
+
+\textbf{\#\# 4. Fault Injection Engine}
+
+Implement runtime fault triggers controlled via \texttt{config.toml} flags or incoming VDA 5050 MQTT Instant Actions:
+
+\begin{itemize}
+    \item \textbf{Mechanical Stall}: Set $\omega_m = 0$, back-EMF $E_b = 0$, triggering maximum current surge $I_m \to I_{\mathit{stall}}$, steep thermal gradient $\frac{dT_m}{dt} \gg 0$, battery voltage sag $V_{\mathit{bat}} \downarrow\downarrow$, and raising a VDA 5050 \texttt{error} array entry.
+    \item \textbf{Wheel Slippage}: Force high slip ratio ($s \to 1$), resulting in $v_{\mathit{enc}} \gg v_{\mathit{ground}}$ while motor load torque drops ($\tau_L \to 0$).
+    \item \textbf{Gearbox Degradation}: Introduce an additive friction offset $\tau_{\mathit{friction}}$, increasing steady-state current $I_m \uparrow$ and equilibrium temperature $T_{m,\mathit{ss}} \uparrow$.
+    \item \textbf{Stator Short Circuit}: Inject current ripple harmonics and rapid copper heating.
+    \item \textbf{Battery SOH Degradation}: Multiply internal resistance $R_{\mathit{int}}$, inducing severe voltage sag during acceleration steps.
+\end{itemize}
+
+\textbf{\#\# 5. Deliverables}
+
+\begin{itemize}
+    \item Clean, idiomatic Rust code added to \texttt{bekirbostanci/vda5050\_vehicle\_simulator}.
+    \item Updated \texttt{config.toml} template with comments explaining all electromechanical, thermal, and fault parameters.
+    \item Unit tests in Rust verifying physics update steps and VDA 5050 JSON payload serialization.
+\end{itemize}
+
+\par\vspace{6pt}
+{\centering\small\textit{Excerpt of the prompt used to guide the simulator extension}\par}
+\end{promptbox}
+\subsection{Physical Telemetry Model}
+
+The generated telemetry is based on a simplified electromechanical representation of an AGV traction system. Although the model does not attempt to reproduce every physical phenomenon present in a real vehicle, it captures the dominant electrical, mechanical, and thermal relationships required for anomaly detection experiments.
+
+The electrical behavior of the motor is represented by the armature-equivalent circuit:
+\begin{align}
+    \label{eq:motor_back_emf}E_b(t) &= K_e \omega_m(t) \\
+    V_m(t) &= R_a(T_m(t)) I_m(t) + L_a \dot{I}_m(t) + E_b(t) \label{eq:motor_voltage}
+\end{align}
+
+The motor torque is computed according to:
+\begin{equation}
+    \tau_m(t)=K_tI_m(t)
+    \label{eq:electromagnetic_torque}
+\end{equation}
+
+The mechanical dynamics of the drivetrain are represented as:
+\begin{equation}
+    J_{eq}\dot{\omega}_m(t)=\tau_m(t)-B_m\omega_m(t)-\tau_{L,ref}(t)
+    \label{eq:torque_balance}
+\end{equation}
+where the reflected load torque is given by:
+\begin{equation}
+    \tau_{L,ref}(t)= \frac{\tau_L(t)} {\eta_g i_g}
+\end{equation}
+
+Vehicle linear velocity is obtained from the motor speed and gearbox ratio:
+\begin{equation}
+    v(t)= \frac{\omega_m(t)} {i_g} r_w(1-s(t))
+\end{equation}
+where $s(t)$ represents the wheel slip ratio.
+
+\subsection{Thermal and Battery Modelling}
+
+Thermal dynamics were incorporated to model the influence of current consumption on motor temperature and electrical resistance.
+
+The temperature-dependent armature resistance is approximated as:
+\begin{equation}
+    R_a(T_m)=R_{a0} \left[ 1+\alpha(T_m-T_0) \right]
+\end{equation}
+
+Motor temperature evolves according to:
+\begin{equation}
+    C_{th} \frac{dT_m}{dt} = I_m^2R_a(T_m) + C_{fe}\omega_m^{1.6}B_{max}^2 - \frac{T_m-T_{amb}} {R_{th}}
+\end{equation}
+
+Battery behavior is represented using a simplified equivalent-circuit model:
+\begin{equation}
+    V_{bat}(t)= V_{ocv}(SOC) - I_{bat}(t)R_{int}(SOC,T_{bat})
+    \label{eq:battery_ecm}
+\end{equation}
+
+For computational efficiency, the polarization voltage term was neglected:
+\begin{equation}
+    V_{pol}(t)=0
+\end{equation}
+This simplification is justified because the objective of the simulator is not accurate electrochemical battery modelling but rather the generation of realistic electromechanical telemetry patterns for machine learning experiments.
+
+

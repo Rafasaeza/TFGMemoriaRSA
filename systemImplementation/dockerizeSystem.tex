@@ -1,0 +1,35 @@
+\section{Containerized Deployment} Following the architectural decisions described in Chapter~\ref{chap:system_architecture}, all components were deployed as Docker containers. Containerization provides reproducibility, isolation of dependencies, and simplifies the deployment and maintenance of the platform. 
+
+\subsection{Docker Compose Organization} 
+To improve maintainability and modularity, the platform is organized as a collection of independent Docker Compose files. Each architectural layer maintains its own deployment definition, while a main \texttt{docker-compose.yml} file aggregates all services using the Docker Compose \texttt{include} directive. 
+
+This approach allows each subsystem to be developed and deployed independently while preserving a unified deployment strategy for the complete platform. 
+
+Listing~\ref{lst:main-compose} shows the main Docker Compose configuration used to orchestrate the different services.
+
+\begin{lstlisting}[language=yaml, caption={Main Docker Compose structure}, label={lst:main-compose}, basicstyle=\ttfamily\small, breaklines=true]
+include:
+  - docker/mqtt-broker/docker-compose.yml
+  - docker/source_systems/vda5050_vehicle_simulator/docker-compose.yml
+  ...
+\end{lstlisting}
+
+\subsection{Network Segmentation} 
+Dedicated Docker bridge networks were created to isolate communication between system components. Rather than exposing every service to a common network, individual networks were assigned according to the communication requirements of each layer. 
+
+This strategy reduces unnecessary connectivity between containers and simplifies service discovery. Furthermore, it follows the principle of least privilege by restricting access only to the services required by each component. 
+
+The current implementation defines dedicated networks for MQTT communication, event streaming, and data processing services.
+
+Listing~\ref{lst:docker-networks} presents the network configuration currently used by the platform.
+
+\begin{lstlisting}[language=yaml, caption={Docker network configuration}, label={lst:docker-networks}, basicstyle=\ttfamily\small, breaklines=true]
+networks:
+  spark-net:
+    driver: bridge
+  redpanda-net:
+    driver: bridge
+  mqtt-net:
+    driver: bridge
+\end{lstlisting}
+   

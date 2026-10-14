@@ -30,6 +30,40 @@
 
 \graphicspath{{figures/}}
 
+\lstdefinelanguage{json}{
+  sensitive=true,
+  morestring=[b]",
+  morecomment=[l]{//},
+}
+
+\lstdefinelanguage{yaml}{
+  sensitive=true,
+  morestring=[b]" delimspace=[{}[]],
+  morecomment=[l]{\#},
+}
+
+\lstdefinelanguage{configToml}{
+  sensitive=true,
+  morecomment=[l]{\#},
+  morecomment=[l]{;},
+  morestring=[b]" delimspace=[{}[]],
+}
+
+\usepackage[framemethod=default]{mdframed}
+\mdfdefinestyle{promptbox}{%
+  backgroundcolor=codebg,
+  linecolor=coderule,
+  linewidth=0.3pt,
+  roundcorner=2pt,
+  innertopmargin=8pt,
+  innerbottommargin=8pt,
+  innerleftmargin=10pt,
+  innerrightmargin=10pt
+}
+\newenvironment{promptbox}
+  {\begin{mdframed}[style=promptbox]\small\raggedright}
+  {\end{mdframed}}
+
 %======================================================================
 \begin{document}
 
@@ -100,6 +134,7 @@ Maintenance },
 %────────────────────── Cuerpo ─────────────────────────────────────────
 % https://en.wikipedia.org/wiki/Standing_on_the_shoulders_of_giants 
 \input{introduction/introduction}
+\input{technologies/technologies}
 \input{stateOfTheArt/stateOfTheArt}
 \input{requirementsAnalysis/requirementsAnalysis}
 \input{methodologyPlanning/methodologyPlanning}

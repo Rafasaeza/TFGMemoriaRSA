@@ -1,0 +1,25 @@
+% !TeX root = ../main.tex
+\section{Source System Simulation} 
+\label{sec:source_system_simulation} 
+The source system layer is currently implemented using a modified version of the \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050}. The simulator executes inside a dedicated container and connects to the MQTT broker through the shared \texttt{mqtt-net} network. 
+
+The \texttt{depends\_on} directive combined with Docker health checks guarantees that the simulator starts only after the broker has become available. 
+
+\begin{lstlisting}[language=yaml, caption={VDA5050 Simulator Docker Compose}, label={lst:vda5050-simulator-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  simulator:
+    image: vda5050-vehicle-simulator:latest
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - mqtt-net
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+\end{lstlisting}
+
+The simulator configuration is loaded from a dedicated configuration file that defines fleet parameters, MQTT communication settings, and telemetry generation properties. During execution, each simulated AGV periodically publishes VDA 5050-compliant state messages to the MQTT broker. 
+
+To support the anomaly detection use case, the original simulator was extended with additional telemetry channels representing motor, battery, and drivetrain behavior. These extensions enable the generation of realistic training data for machine learning workloads while preserving compatibility with the VDA 5050 communication standard.
+

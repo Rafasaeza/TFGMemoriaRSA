@@ -90,7 +90,7 @@ function Stop-Build([string]$step) {
 # Un .aux truncado (compilacion concurrente o corrida abortada) da
 # "Missing \begin{document}" / "Extra }" al releerlo: limpiar y reintentar.
 function Test-AuxCorrupt {
-  (Test-Path $Log) -and ((Get-Content $Log -Raw) -match 'main\.aux.*: (Missing .begin\{document\}|Extra \}, or forgotten)')
+  (Test-Path $Log) -and ((Get-Content $Log -Raw) -match 'main\.aux.*: (Missing .begin\{document\}|Extra \}, or forgotten|File ended while scanning)|\\@firstoffive')
 }
 
 function Invoke-EngineStep([string]$step) {

@@ -16,7 +16,7 @@
   \vspace{2pt}%
 }
 
-The simulator described in Section~\ref{sec:training_set} replaces heuristic signal
+The simulator described in Section~\ref{sec:source_system_simulation} replaces heuristic signal
 generation with an explicit powertrain model: an armature circuit, a torque balance
 referred to the motor shaft, a lumped thermal node for the winding, a battery with an
 equivalent-circuit terminal voltage and a set of transducers that inject noise,
@@ -109,7 +109,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     it is $\omega_{\mathrm{m}} = i_{\mathrm{g}}\, v / r_{\mathrm{w}} = 10 \times
     1.0~\mathrm{m/s}\,/\,0.10~\mathrm{m} = 100~\mathrm{rad/s}$: the wheel turns at
     $10~\mathrm{rad/s}$ and the gearbox multiplies that speed by ten, which is the
-    kinematic relation stated in Section~\ref{sec:training_set}. A plateau at any other
+    kinematic relation stated in Section~\ref{sec:source_system_simulation}. A plateau at any other
     value would mean that the wheel radius or the gearbox ratio published in the
     configuration is not the one the model uses.
 
@@ -122,7 +122,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     $K_{\mathrm{e}} \omega_{\mathrm{m}}$: the measured ratio is $1.0001$, that is,
         Equation~\eqref{eq:motor_back_emf} holds with the configured constant and is not
     being emulated from a different quantity. This observation is supported by the same
-    panel used for the speed check, \Cref{fig:motor_speed_back_EMF_arranque_crucero}.
+    panel used for the speed check, \figurename~\ref{fig:motor_speed_back_EMF_arranque_crucero}.
 
     \item
  \textbf{Torque consistent with current after removing the standby draw.}
@@ -144,7 +144,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     $0.57~\mathrm{N\,m} \times 100~\mathrm{rad/s}$. This closes the energy chain between
     the mechanical and the electrical channels and rules out that power is generated
     independently from torque and speed, as shown in
-    \Cref{fig:motor_torque_crucero}.
+    \figurename~\ref{fig:motor_torque_crucero}.
 
     \item \textbf{Current is a band, not a line.}
     The cruise armature
@@ -159,7 +159,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     noise scale is leaking into healthy data, and a perfectly straight line, which would
     mean the conditioning layer has been bypassed and the training set would be
     unrealistically clean, as observed in
-    \Cref{fig:armature_current_and_bus_voltage_arranque_crucero}.
+    \figurename~\ref{fig:armature_current_and_bus_voltage_arranque_crucero}.
 
     \item \textbf{Vibration rises with travel, not with command.}
     The channel reports the root-mean-square acceleration of the chassis in units of
@@ -168,7 +168,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     model that scalar is driven by the quantities that excite the chassis: an idle floor
     of $0.02~\mathrm{g}$, a rolling term of $0.15~\mathrm{g}$ per $\mathrm{m/s}$ of
     speed actually made good over the ground, the fault-driven terms described in
-    Section~\ref{sec:training_set} and the noise of the transducer, with a dispersion of
+    Section~\ref{sec:source_system_simulation} and the noise of the transducer, with a dispersion of
     $0.025~\mathrm{g}$. At the cruise speed of $1.0~\mathrm{m/s}$ the expected value is
     $0.02 + 0.15 \times 1.0 = 0.17~\mathrm{g}$, about $1.7~\mathrm{m/s^2}$, and the
     reading has to be interpreted as a distribution around that mean rather than as a
@@ -245,7 +245,7 @@ current} refers to \texttt{motor\_current} and \emph{pack current} refers to
     the expected drift is $+0.23~\mathrm{K}$, and the historian shows exactly that: from
     $22.02$ to $22.25~^{\circ}\mathrm{C}$ along the reference mission, followed by an
     equally slow retreat towards the ambient once the drive is switched off, visible in
-    \Cref{fig:temperature_godown} as the nearly flat lower trace. The comparison between
+    \figurename~\ref{fig:temperature_godown} as the nearly flat lower trace. The comparison between
     both channels is the assertion: a pack rising by several kelvin in a few minutes would
     mean the two nodes are exchanged or that the losses are injected in the wrong place,
     and a pack frozen at a constant value would mean the thermal state of the battery is
