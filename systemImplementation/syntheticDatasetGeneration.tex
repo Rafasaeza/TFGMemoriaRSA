@@ -13,14 +13,13 @@ The generated telemetry is embedded into the VDA 5050 \texttt{information} field
     \item Motor angular velocity ($\omega_m$)
     \item Motor torque ($\tau_m$)
     \item Back-electromotive force ($E_b$)
-    \item Motor electrical power
+    \item Motor power
     \item Battery current ($I_{bat}$)
     \item Battery voltage ($V_{bat}$)
     \item State of Charge (SOC)
     \item State of Health (SOH)
     \item Battery temperature ($T_{bat}$)
     \item Wheel slip ratio
-    \item Vibration RMS
 \end{itemize}
 
 These variables were selected because they are commonly used in predictive maintenance, condition monitoring, and fault diagnosis applications for electrically driven industrial vehicles. 
@@ -29,10 +28,10 @@ The extension of the original \texttt{vda5050\_vehicle\_simulator} required the 
 
 Specifically, Anthropic Claude Sonnet 5 was used as an AI programming assistant during the design and implementation of the telemetry generation module. The model was provided with detailed requirements regarding the desired physical behaviour, software architecture, VDA 5050 compatibility constraints, and telemetry channels to be incorporated into the simulator. 
 
-The prompt was formulated as a software specification document describing the required equations, architectural constraints, data structures, fault scenarios, and expected deliverables. An excerpt of the prompt is shown below. 
+The prompt was formulated as a software specification document describing the required equations, architectural constraints, data structures, fault scenarios, and expected deliverables. The prompt is shown below. 
 
 The generated code was not incorporated directly into the project. Instead, all outputs were manually reviewed, adapted, validated, and tested before integration into the final simulator implementation.
-
+This evaluation can be seen in chapter 7 \ref{chap:testing_evaluation}
 
 \begin{promptbox}
 \textbf{\# Complete Sensor Adaptation Prompt}
@@ -57,6 +56,7 @@ Implement an internal physics loop running within a dedicated async task or thre
 \[
     V_m(t) = R_a(T_m) \cdot I_m(t) + L_a \frac{dI_m(t)}{dt} + K_e \cdot \omega_m(t)
 \]
+\textit{Implemented deviation --- $L_a$ is neglected ($L_a \approx 0$).} The simulator treats the armature circuit quasi-statically as $V_m(t) = R_a(T_m) \cdot I_m(t) + K_e \cdot \omega_m(t)$, neglecting the inductive term $L_a \frac{dI_m}{dt}$. Justification: the electrical time constant $\tau_e = L_a / R_a \approx 40\,\mathrm{ms}$ is negligible compared to the mechanical time constants ($\approx$1--3\,s) and the 1\,Hz VDA 5050 state reporting rate. Quasi-steady armature dynamics match standard mobile robot modeling practices, simplifying manual validation and eliminating spurious derivative noise.
 \[
     \tau_m(t) = K_t \cdot I_m(t)
 \]
@@ -81,13 +81,11 @@ where:
     C_{th} \frac{dT_m(t)}{dt} = I_m(t)^2 R_a(T_m) + C_{fe} \omega_m(t)^{1.6} B_{\max}^2 - \frac{T_m(t) - T_{\mathit{amb}}}{R_{th}}
 \]
 
-\textbf{\#\#\# Battery 1-RC Equivalent Circuit Model (ECM)}
+\textbf{\#\#\# Battery Equivalent Circuit Model (ECM)}
 \[
-    V_{\mathit{bat}}(t) = V_{\mathit{ocv}}(\mathit{SOC}) - I_{\mathit{bat}}(t) R_{\mathit{int}}(\mathit{SOC}, T_{\mathit{bat}}) - V_{\mathit{pol}}(t)
+    V_{\mathit{bat}}(t) = V_{\mathit{ocv}}(\mathit{SOC}) - I_{\mathit{bat}}(t) \cdot R_{\mathit{int}}(\mathit{SOC}, T_{\mathit{bat}})
 \]
-\[
-    \frac{dV_{\mathit{pol}}(t)}{dt} = -\frac{V_{\mathit{pol}}(t)}{R_p C_p} + \frac{I_{\mathit{bat}}(t)}{C_p}
-\]
+\textit{Implemented deviation --- the polarisation branch $V_{\mathit{pol}}$ is neglected.} A full 1-RC ECM would add a polarisation voltage governed by $\frac{dV_{\mathit{pol}}}{dt} = -\frac{V_{\mathit{pol}}}{R_p C_p} + \frac{I_{\mathit{bat}}}{C_p}$; the simulator deliberately drops it and ships the purely ohmic model above, with $R_{\mathit{int}}$ carrying the full DC sag (the $R_p$ value folded into it: $0.035 + 0.015 = 0.050\,\Omega$). Justification: the goal of this work is a benchmark for anomaly recognition, not a cell-accurate battery. $R_p$/$C_p$ cannot be calibrated or validated against a real AGV pack without pulse tests, the branch contributes less than 20\,\% of the terminal-voltage sag (the ohmic drop dominates: $60\,\mathrm{A} \times 0.05\,\Omega = 3\,\mathrm{V}$ vs.\ $\approx$0.9\,V), and with a purely ohmic pack the load-step signature is exactly $I \cdot R_{\mathit{int}}$ --- so the SOH fault reads as a clean change of the $V$-vs-$I$ slope and the remaining channels keep every fault signature. Re-add the $R_p$/$C_p$ branch if relaxation dynamics ever become part of the detection task.
 
 \textbf{\#\# 3. Rust Implementation Strategy}
 

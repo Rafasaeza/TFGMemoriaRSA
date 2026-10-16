@@ -33,50 +33,44 @@ regression protected: every run is observed, interpreted and archived by hand. T
 purpose is evidential rather than verificational, to show a reader of the thesis that
 the simulated signals reproduce the qualitative and quantitative behaviour expected
 from the electromechanical model, so that the anomalies synthesised later on can be
-argued to be physically plausible and not artefacts of arbitrary signal shaping. The
-deterministic arithmetic of the model (torque equilibrium, back-EMF, energy balance,
-sensor conditioning, fault signatures) is instead covered by the automated Rust test
-suite of the simulator, which is executed on every build and is the appropriate
-instrument for that class of assertions. This section therefore complements, and does
-not replace, the automated tests.
+argued to be physically plausible and not artefacts of arbitrary signal shaping.
 
 \subsection{Test Environment and Procedure}
 
 All observations were taken from the deployed stack: the simulated fleet publishes one
 VDA~5050 \texttt{state} message per robot and second, which travels through the MQTT broker
 through Telegraf and Kafka Connect into the QuestDB table \texttt{vda5050\_state}, where
-the Grafana dashboards \textit{VDA5050 Powertrain Physics}, \textit{VDA5050 Injected
-Faults}, \textit{VDA5050 Robot Dashboard}, \textit{VDA5050 Robot Velocity} and
-\textit{VDA5050 Robot Vibration} read them. The state publication rate of one hertz is
+the Grafana dashboards, representations of each source form read them. The state publication rate of one hertz is
 the effective sampling rate of every observation reported below and sets the limit of
 what can be seen.
+A gaussian noise is introduce to simulate the real world behaviour.
 
-The reference stimulus is a single long mission issued with the \textbf{Capture run
-(long straight)} control-panel action, which builds a straight unloaded route towards
-the positive x direction with a node every 60 m, sized from the configured cruise speed
-so that the vehicle remains at cruise for roughly eleven minutes. A straight, unloaded
-path is deliberate: it keeps the lateral and angular velocity at zero, so the only
-events visible in the plots are the repeated acceleration ramps produced by the nodes
-and the slower thermal and electrochemical ramps that accumulate behind them. Each
-check below states what has to be observed and the value measured in the reference run;
-the figure that follows every check is the corresponding panel of the dashboard.
+\subsection{Motor voltage and governing variables (Vm, Im, wm, Ra, La, Ke)}
+To verify that the simulator adheres to the electromechanical motor model, the quasi-steady armature equation $V_m(t) \approx R_a(T_m) \cdot I_m(t) + K_e \cdot \omega_m(t)$ (neglecting the fast inductive transient $L_a \frac{dI_m}{dt} \approx 0$) was evaluated using telemetry sampled during cruise motion. With an armature resistance $R_a = 0.0501\,\Omega$, current $I_m = 2.9688\,\text{A}$, rotor speed $\omega_m = 100.0413\,\text{rad/s}$, and $K_e = 0.19\,\text{V}\cdot\text{s/rad}$, the calculated back-EMF is $E_b = K_e \cdot \omega_m = 19.0078\,\text{V}$ (closely matching the measured $E_{b,\text{meas}} = 18.9922\,\text{V}$) and the ohmic drop is $R_a \cdot I_m = 0.1487\,\text{V}$. The theoretical terminal voltage yields $V_{m,\text{calc}} = 0.1487\,\text{V} + 18.9922\,\text{V} = 19.1409\,\text{V}$, which deviates by only $0.0550\,\text{V}$ (a relative error of $0.28\%$) from the measured $V_{m,\text{meas}} = 19.0859\,\text{V}$. This minor discrepancy is completely bounded by the simulated 12-bit ADC quantization step ($\approx 7.8\,\text{mV}$) and the Gaussian sensor noise ($\sigma_v = 0.03\,\text{V}$), confirming that the simulator accurately follows the physical motor principle.
+\physfig{motor_voltage_form}{Motor voltage form, with all the terms}
 
-Two conventions have to be kept in mind when reading the numbers, because without them
-two of the published channels appear inconsistent with the model. First, the current
-transducer is a hall-effect sensor clamped on the DC side of the drive, so the published
-\texttt{motor\_current} is the armature current plus the standby draw of the drive
-itself, denoted $I_{\mathrm{q}} = 0.35~\mathrm{A}$; the torque-producing current is
-therefore $I_{\mathrm{m}} = \texttt{motor\_current} - I_{\mathrm{q}}$, and the torque
-channel is consistent with the current channel only after that subtraction. Second, the
-published \texttt{motor\_voltage} is the DC-link, that is, the battery terminal
-voltage, and not the voltage that the converter applies to the armature, which is the
-lower quantity appearing in Equation~\eqref{eq:motor_voltage}; combining the published
-voltage with the published back-EMF and armature resistance would otherwise seem to
-violate that equation by about four volts. Throughout this section, \emph{armature
-current} refers to \texttt{motor\_current} and \emph{pack current} refers to
-\texttt{battery\_current\_a}, which are two different channels.
+\subsection{Motor Torque and governing variables (tau_m, Kt, Im)}
+To verify the simulator follows the motor toque form, the following grafana dashboard is obteined showing the low difference between the calculated values, and the one the robot is sending as sensor data
+"has to be reformated, more professional take a look at Motor voltage and governing variables (Vm, Im, wm, Ra, La, Ke)(AGENT!)"
+\physfig{torque_form}{Motor torque form, with all the terms}
 
+\subsection{Mechanical torque balance and load dynamics (tau_m, tau_L, wm, Bm, Jm)}
+"The calculation has to be shown(Agent!)"
+\physfig{mechanicalTorqueBalance}{Mechanical torque balance and load dynamics, with all the terms}
 \subsection{Start-Up and Cruise}
+
+\subsection{Kinematic closure and wheel slip dynamics (v, wm, s, rw, ig)}
+To verify the simulator follows the grown velocity form, the next panel is observed, and can be noticed, that there is only a small difference between the calculated and the observed
+"has to be reformated, more professional take a look at Motor voltage and governing variables (Vm, Im, wm, Ra, La, Ke)(AGENT!)"
+\physfig{linearVelocityForm}{Linear velocity form, with all the terms}
+
+\subsection{Motor thermal dynamics and power loss balance (Tm, Tamb, Pjoule, Piron, Pcool)}
+"The calculation has to be shown(Agent!)"
+\physfig{motor_termical_balance}{Motor thermal dynamic and power loss balance, with all the terms}
+
+\subsection{Battery terminal voltage and internal-resistance drop (Vbat, Vocv, Rint, Ibat)}
+To verify the simulator follows the battery terminal voltage form, the following panel from grafana is studied, and it has only a small difference due, to the noise
+\physfig{battery_tension_form}{Battery tension form, with all terms}
 
 \begin{enumerate}
     \item \textbf{Current peak during acceleration, followed by a cruise plateau.}

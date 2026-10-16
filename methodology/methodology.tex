@@ -1,0 +1,53 @@
+% !TeX root = ../main.tex
+\section{Methodology}
+
+The methodological approach adopted in this project combines a traditional plan-driven software engineering process for requirements definition and system design with an agile development framework based on Scrum for implementation, integration, and validation activities. This hybrid approach was selected due to the collaborative nature of the project with EDAG and the need to balance clearly defined industrial requirements with the flexibility required during the development of Machine Learning and Industrial Internet of Things (IIoT) solutions.
+
+The methodology is structured into three main phases: (i) domain immersion and preliminary research, (ii) requirements engineering and system design, and (iii) incremental development and validation.
+
+\subsection{Domain Immersion and Preliminary Research}
+
+Before the technical development phase, the student participated in activities related to an industrial project within EDAG involving Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs). This initial period was essential to understand the operational context, industrial processes, and technological challenges associated with smart manufacturing environments.
+In parallel, an extensive literature review was conducted to establish the scientific and technical foundations of the project. Research papers, industrial reports, and technical documentation were analyzed to identify state-of-the-art solutions in Industrial IoT architectures, streaming data platforms, anomaly detection techniques, and data engineering infrastructures for real-time analytics.
+This phase enabled the acquisition of domain-specific knowledge, facilitated technology selection, and provided a deeper understanding of the practical requirements and constraints that would later influence architectural and design decisions.
+
+\subsection{Requirements Engineering and System Design}
+
+The requirements engineering phase followed a plan-driven approach. Unlike conventional software projects in which requirements emerge progressively from a product backlog, the initial specifications of this work were provided directly by EDAG within the framework of the ILTIS project. These specifications included business objectives, technical requirements, industrial constraints, and interoperability standards, particularly the VDA 5050 protocol used for communication with AGVs and AMRs. The availability of these requirements from the beginning allowed the project scope to be clearly defined and the architectural foundations of the data pipeline to be established before implementation activities started.
+In addition, the information gathered during the literature review was used to evaluate existing solutions, identify technological limitations, and justify the choice of specific frameworks and technologies adopted throughout the project.
+The outcome of this phase included:
+\begin{itemize}
+    \item Definition of functional and non-functional requirements.
+    \item Identification of industrial constraints and communication standards.
+    \item Design of the data architecture and processing pipeline.
+    \item Establishment of technical acceptance criteria.
+    \item Selection of technologies and tools.
+\end{itemize}
+
+\subsection{Incremental Development and Validation}
+
+The implementation phase was conducted using Scrum, an agile framework widely adopted in both software engineering and data engineering projects and actively used within EDAG. This methodological alignment facilitated integration into the company's working practices while supporting efficient knowledge transfer between academic and industrial stakeholders.
+The adoption of Scrum was particularly suitable due to the exploratory nature of several project components. Integrating real-time IIoT infrastructures with Machine Learning models introduces uncertainty regarding telemetry formats, data quality, feature extraction strategies, and model performance.
+Scrum addresses these challenges through short development iterations that support continuous feedback, progressive refinement, and incremental delivery of functionalities.
+
+\subsubsection{Role Adaptation}
+
+Since the project was carried out by a single student, Scrum roles were adapted accordingly:
+\begin{itemize}
+    \item \textbf{Product Owner}: Assumed jointly by the academic supervisors from the University of Málaga and the designated supervisor at EDAG. Their responsibilities included defining objectives, prioritizing functionalities, validating deliverables, and ensuring alignment with business requirements.
+    \item \textbf{Scrum Master and Development Team}: Assumed by the student, responsible for sprint planning, software development, infrastructure deployment, Machine Learning experimentation, integration activities, testing, and documentation.
+\end{itemize}
+
+\subsubsection{Sprint Planning}
+
+The development process was organized into two-week sprints. The initial roadmap consisted of the following iterations:
+\begin{enumerate}
+    \item IIoT Simulation Environment Setup.
+    \item Streaming Pipeline and Data Ingestion.
+    \item Data Persistence and Lakehouse Architecture.
+    \item Data Infrastructure Validation and Performance Testing.
+    \item Artificial Intelligence and Anomaly Detection Module I.
+    \item Artificial Intelligence and Anomaly Detection Module II.
+    \item Observability, Alerting, and Final Validation.
+\end{enumerate}
+At the end of each sprint, results were reviewed and evaluated against the predefined acceptance criteria. Feedback obtained during these reviews was incorporated into subsequent iterations, enabling continuous improvement of both the infrastructure and the Machine Learning components throughout the project lifecycle.
