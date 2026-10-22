@@ -16,8 +16,8 @@
   \vspace{2pt}%
 }
 
-The simulator described in Section~\ref{sec:source_system_simulation} replaces heuristic signal
-generation with an explicit powertrain model: an armature circuit, a torque balance
+The physical powertrain model formulated in Section~\ref{sec:physical_modeling} and incorporated into the simulator as described in Section~\ref{sec:synthetic_dataset_generation} replaces heuristic signal
+generation with an explicit electromechanical model: an armature circuit, a torque balance
 referred to the motor shaft, a lumped thermal node for the winding, a battery with an
 equivalent-circuit terminal voltage and a set of transducers that inject noise,
 quantisation and drift into every published channel. Introducing that model raises a
@@ -39,7 +39,7 @@ argued to be physically plausible and not artefacts of arbitrary signal shaping.
 
 All observations were taken from the deployed stack: the simulated fleet publishes one
 VDA~5050 \texttt{state} message per robot and second, which travels through the MQTT broker
-through Telegraf and Kafka Connect into the QuestDB table \texttt{vda5050\_state}, where
+through Kafka Connect into the QuestDB table \texttt{vda5050\_state}, where
 the Grafana dashboards, representations of each source form read them. The state publication rate of one hertz is
 the effective sampling rate of every observation reported below and sets the limit of
 what can be seen.
@@ -49,284 +49,25 @@ A gaussian noise is introduce to simulate the real world behaviour.
 To verify that the simulator adheres to the electromechanical motor model, the quasi-steady armature equation $V_m(t) \approx R_a(T_m) \cdot I_m(t) + K_e \cdot \omega_m(t)$ (neglecting the fast inductive transient $L_a \frac{dI_m}{dt} \approx 0$) was evaluated using telemetry sampled during cruise motion. With an armature resistance $R_a = 0.0501\,\Omega$, current $I_m = 2.9688\,\text{A}$, rotor speed $\omega_m = 100.0413\,\text{rad/s}$, and $K_e = 0.19\,\text{V}\cdot\text{s/rad}$, the calculated back-EMF is $E_b = K_e \cdot \omega_m = 19.0078\,\text{V}$ (closely matching the measured $E_{b,\text{meas}} = 18.9922\,\text{V}$) and the ohmic drop is $R_a \cdot I_m = 0.1487\,\text{V}$. The theoretical terminal voltage yields $V_{m,\text{calc}} = 0.1487\,\text{V} + 18.9922\,\text{V} = 19.1409\,\text{V}$, which deviates by only $0.0550\,\text{V}$ (a relative error of $0.28\%$) from the measured $V_{m,\text{meas}} = 19.0859\,\text{V}$. This minor discrepancy is completely bounded by the simulated 12-bit ADC quantization step ($\approx 7.8\,\text{mV}$) and the Gaussian sensor noise ($\sigma_v = 0.03\,\text{V}$), confirming that the simulator accurately follows the physical motor principle.
 \physfig{motor_voltage_form}{Motor voltage form, with all the terms}
 
-\subsection{Motor Torque and governing variables (tau_m, Kt, Im)}
-To verify the simulator follows the motor toque form, the following grafana dashboard is obteined showing the low difference between the calculated values, and the one the robot is sending as sensor data
-"has to be reformated, more professional take a look at Motor voltage and governing variables (Vm, Im, wm, Ra, La, Ke)(AGENT!)"
+\subsection{Motor Torque and governing variables (\texorpdfstring{$\tau_m$, $K_t$, $I_m$}{tau\_m, Kt, Im})}
+To verify that the simulator accurately governs electromagnetic torque generation, the linear torque-current relationship $\tau_m(t) = K_t \cdot I_m(t)$ of Equation~\eqref{eq:electromagnetic_torque} was evaluated against the Grafana telemetry panel shown in Figure~\ref{fig:torque_form}. At the sampled operating point ($t = \text{15:56:38}$, during an idle/standby interval before motion), the torque constant is $K_t = 0.1900\,\text{N}\cdot\text{m/A}$ (numerically equivalent to the back-EMF constant $K_e = 0.1900\,\text{V}\cdot\text{s/rad}$) and the armature current is $I_m = 0.0391\,\text{A}$. The calculated electromagnetic torque yields $\tau_{m,\text{calc}} = K_t \cdot I_m = 0.1900\,\text{N}\cdot\text{m/A} \times 0.0391\,\text{A} = 0.007429\,\text{N}\cdot\text{m}$, matching the dashboard's calculated channel (\texttt{calculated\_torque\_nm} = $0.0074\,\text{N}\cdot\text{m}$) to four decimal places. The measured motor torque reported by the drive telemetry is $\tau_{m,\text{meas}} = 0.0077\,\text{N}\cdot\text{m}$ (\texttt{motor\_torque\_nm}), resulting in an absolute discrepancy of only $0.0003\,\text{N}\cdot\text{m}$ ($0.3\,\text{mN}\cdot\text{m}$). This minute deviation is completely bounded by the 12-bit ADC quantization resolution and the Gaussian transducer noise ($\sigma_I \approx 0.08\,\text{A}$, translating to $\sigma_\tau \approx 0.015\,\text{N}\cdot\text{m}$). Across the entire mission profile, dynamic tracking remains consistent: during acceleration ramps, current surges to $I_m \approx 8.63\,\text{A}$ producing a torque peak of $\approx 1.63\,\text{N}\cdot\text{m}$, whereas during steady-state cruise at $I_m \approx 3.0$--$3.2\,\text{A}$, torque settles stably at $\approx 0.57$--$0.61\,\text{N}\cdot\text{m}$. The measured and calculated torque traces overlap seamlessly throughout all motion phases, confirming that the simulated machine faithfully reproduces electromagnetic torque conversion without synthetic distortions.
 \physfig{torque_form}{Motor torque form, with all the terms}
 
-\subsection{Mechanical torque balance and load dynamics (tau_m, tau_L, wm, Bm, Jm)}
-"The calculation has to be shown(Agent!)"
+\subsection{Mechanical torque balance and load dynamics (\texorpdfstring{$\tau_m$, $\tau_L$, $\omega_m$, $B_m$, $J_m$}{tau\_m, tau\_L, wm, Bm, Jm})}
+The dynamic torque equilibrium referred to the motor rotor shaft is governed by Equation~\eqref{eq:torque_balance}, $J_m \frac{d\omega_m(t)}{dt} = \tau_m(t) - B_m \cdot \omega_m(t) - \tau_{L,\text{ref}}(t)$, or expressed in terms of the total mechanical demand: $\tau_{\text{demand}}(t) = J_m \frac{d\omega_m(t)}{dt} + B_m \cdot \omega_m(t) + \tau_{L,\text{ref}}(t)$, where $\tau_{\text{viscous}}(t) = B_m \cdot \omega_m(t)$ is the internal viscous friction torque and $\tau_{L,\text{ref}}(t) = \frac{\tau_L(t)}{\eta_g i_g}$ represents the ground load torque reflected through the reduction gearbox ($i_g = 10$, $\eta_g = 0.85$). This formulation was verified using the Grafana telemetry panel in Figure~\ref{fig:mechanicalTorqueBalance} sampled during steady cruise motion ($t = \text{15:57:16}$). At this operating point, the rotor speed is stabilized at $\omega_m = 99.9031\,\text{rad/s}$ (corresponding to the vehicle travelling at cruise velocity $v \approx 1.0\,\text{m/s}$), rendering the angular acceleration null ($\frac{d\omega_m}{dt} \approx 0$) and nullifying the inertial demand ($J_m \dot{\omega}_m \approx 0$). The reported viscous friction torque is $\tau_{\text{viscous}} = 0.1499\,\text{N}\cdot\text{m}$, which confirms a viscous damping coefficient $B_m = \frac{\tau_{\text{viscous}}}{\omega_m} = \frac{0.1499}{99.9031} \approx 0.0015\,\text{N}\cdot\text{m}\cdot\text{s/rad}$. The reflected load torque is $\tau_{L,\text{ref}} = 0.4155\,\text{N}\cdot\text{m}$, corresponding to the rolling resistance of the $180\,\text{kg}$ vehicle on level ground ($F_{\text{roll}} = C_{rr} m_{\text{total}} g = 0.02 \times 180\,\text{kg} \times 9.81\,\text{m/s}^2 \approx 35.32\,\text{N}$, giving $\tau_L = F_{\text{roll}} \cdot r_w \approx 3.532\,\text{N}\cdot\text{m}$ at wheel radius $r_w = 0.10\,\text{m}$, and $\tau_{L,\text{ref}} = \frac{3.532}{0.85 \times 10} \approx 0.4155\,\text{N}\cdot\text{m}$). The theoretical total mechanical demand thus evaluates to $\tau_{\text{demand}} = \tau_{L,\text{ref}} + \tau_{\text{viscous}} = 0.4155\,\text{N}\cdot\text{m} + 0.1499\,\text{N}\cdot\text{m} = 0.5654\,\text{N}\cdot\text{m}$, perfectly coinciding with the reported channel \texttt{total\_mechanical\_demand\_nm} ($0.5654\,\text{N}\cdot\text{m}$). The electromagnetic motor torque delivered by the drive at this moment is $\tau_{m,\text{meas}} = 0.6130\,\text{N}\cdot\text{m}$, presenting a minor difference of $0.0476\,\text{N}\cdot\text{m}$ attributable to simulated current transducer noise ($\sigma_\tau \approx 0.015\,\text{N}\cdot\text{m}$) and speed controller regulation ripple. During acceleration ramps, the inertial term $J_m\dot{\omega}_m$ momentarily elevates the torque demand to $\approx 1.63\,\text{N}\cdot\text{m}$, validating that the simulator accurately integrates both static resistive loads and dynamic inertial terms.
 \physfig{mechanicalTorqueBalance}{Mechanical torque balance and load dynamics, with all the terms}
-\subsection{Start-Up and Cruise}
 
-\subsection{Kinematic closure and wheel slip dynamics (v, wm, s, rw, ig)}
-To verify the simulator follows the grown velocity form, the next panel is observed, and can be noticed, that there is only a small difference between the calculated and the observed
-"has to be reformated, more professional take a look at Motor voltage and governing variables (Vm, Im, wm, Ra, La, Ke)(AGENT!)"
+\subsection{Kinematic closure and wheel slip dynamics (\texorpdfstring{$v$, $\omega_m$, $s$, $r_w$, $i_g$}{v, wm, s, rw, ig})}
+The kinematic coupling between the electric motor shaft, transmission, driven wheels, and vehicle ground translation is defined by the kinematic closure relation $v(t) = \frac{\omega_m(t)}{i_g} \cdot r_w \cdot (1 - s(t))$, where $v_w(t) = \frac{\omega_m(t)}{i_g} \cdot r_w$ represents the theoretical peripheral linear velocity of the wheel, $i_g = 10$ is the transmission reduction ratio, $r_w = 0.10\,\text{m}$ is the nominal wheel radius, and $s(t)$ is the longitudinal wheel slip ratio. This formulation was validated using the Grafana telemetry panel shown in Figure~\ref{fig:linearVelocityForm} sampled during steady cruise motion ($t = \text{15:56:57}$). At this operating point, the reported wheel linear speed is $v_w = 1.0011\,\text{m/s}$ (corresponding to an angular motor velocity $\omega_m = \frac{v_w i_g}{r_w} = 100.11\,\text{rad/s}$), and the estimated longitudinal wheel slip is $s = -0.0073$ (a slight negative micro-slip of $-0.73\%$ induced by transducer Gaussian noise and nominal tire contact compliance). Evaluating the kinematic closure equation yields a theoretical ground speed of $v_{\text{calc}} = v_w \cdot (1 - s) = 1.0011\,\text{m/s} \cdot (1 - (-0.0073)) = 1.0084\,\text{m/s}$, matching the dashboard's calculated channel (\texttt{calculated\_ground\_speed\_v} = $1.0084\,\text{m/s}$) to four decimal places. When compared to the measured ground speed $v_{\text{meas}} = 1.0000\,\text{m/s}$ (\texttt{ground\_speed\_v}), the absolute discrepancy is only $0.0084\,\text{m/s}$ (a relative error of $0.84\%$). Across the mission profile, the wheel speed tracks the ground translation with minimal slip ($s \approx 0$) during unperturbed cruise, while the brief velocity reductions at navigation waypoints are tracked synchronously by both channels. This confirms that the transmission kinematics and slip interaction are physically consistent and free of numerical drift.
 \physfig{linearVelocityForm}{Linear velocity form, with all the terms}
 
-\subsection{Motor thermal dynamics and power loss balance (Tm, Tamb, Pjoule, Piron, Pcool)}
-"The calculation has to be shown(Agent!)"
+\subsection{Motor thermal dynamics and power loss balance (\texorpdfstring{$T_m$, $T_{\mathrm{amb}}$, $P_{\mathrm{joule}}$, $P_{\mathrm{iron}}$, $P_{\mathrm{cool}}$}{Tm, Tamb, Pjoule, Piron, Pcool})}
+The thermal evolution of the motor winding is governed by the lumped first-order power balance $C_{th} \frac{dT_m(t)}{dt} = P_{\text{joule}}(t) + P_{\text{iron}}(t) - P_{\text{cool}}(t)$, where $P_{\text{joule}}(t) = I_m(t)^2 R_a(T_m)$ represents the resistive copper losses, $P_{\text{iron}}(t) = C_{fe} \omega_m(t)^{1.6} B_{\max}^2$ represents core iron losses, and $P_{\text{cool}}(t) = \frac{T_m(t) - T_{\text{amb}}}{R_{th}}$ is the convective heat transfer to the ambient environment ($T_{\text{amb}} = 22.0000\,^{\circ}\text{C}$). This thermal balance was evaluated using the telemetry panel shown in Figure~\ref{fig:motor_termical_balance} at $t = \text{15:57:07}$ during an acceleration transition between navigation nodes. At this instant, the telemetry records copper losses of $P_{\text{joule}} = 3.6831\,\text{W}$ and core iron losses of $P_{\text{iron}} = 3.7758\,\text{W}$, yielding a total heat dissipation rate of $P_{\text{total}} = 3.6831\,\text{W} + 3.7758\,\text{W} = 7.4589\,\text{W}$. With the winding temperature at $T_m = 23.1900\,^{\circ}\text{C}$, the temperature rise above ambient is $T_m - T_{\text{amb}} = 1.1900\,\text{K}$, producing a cooling power of $P_{\text{cool}} = 0.4760\,\text{W}$, which exactly identifies the thermal resistance $R_{th} = \frac{T_m - T_{\text{amb}}}{P_{\text{cool}}} = \frac{1.1900\,\text{K}}{0.4760\,\text{W}} = 2.5000\,\text{K/W}$. The instantaneous asymptotic equilibrium temperature is given by $T_{\infty} = T_{\text{amb}} + P_{\text{total}} \cdot R_{th} = 22.0000\,^{\circ}\text{C} + (7.4589\,\text{W} \times 2.5000\,\text{K/W}) = 40.64725\,^{\circ}\text{C} \approx 40.6473\,^{\circ}\text{C}$, which matches the dashboard channel \texttt{equilibrium\_temp\_c} ($40.6473\,^{\circ}\text{C}$) to four decimal places. The net thermal power $P_{\text{net}} = P_{\text{total}} - P_{\text{cool}} = 6.9829\,\text{W}$ is integrated across the thermal capacitance $C_{th} = 80\,\text{J/K}$, producing a smooth, continuous exponential temperature rise ($\frac{dT_m}{dt} \approx 0.087\,\text{K/s}$) without artificial discontinuities, verifying the physical validity of the thermal node.
 \physfig{motor_termical_balance}{Motor thermal dynamic and power loss balance, with all the terms}
 
-\subsection{Battery terminal voltage and internal-resistance drop (Vbat, Vocv, Rint, Ibat)}
-To verify the simulator follows the battery terminal voltage form, the following panel from grafana is studied, and it has only a small difference due, to the noise
+\subsection{Battery terminal voltage and internal-resistance drop (\texorpdfstring{$V_{\mathrm{bat}}$, $V_{\mathrm{ocv}}$, $R_{\mathrm{int}}$, $I_{\mathrm{bat}}$}{Vbat, Vocv, Rint, Ibat})}
+The terminal voltage of the traction battery is governed by the simplified equivalent-circuit model (ECM) of Equation~\eqref{eq:battery_ecm}: $V_{\text{bat}}(t) = V_{\text{ocv}}(\text{SOC}) - \Delta V_{\text{ohmic}}(t)$, where $\Delta V_{\text{ohmic}}(t) = I_{\text{bat}}(t) \cdot R_{\text{int}}(\text{SOC}, T_{\text{bat}})$ represents the instantaneous ohmic drop across the pack internal resistance. This relation was examined using the Grafana telemetry panel shown in Figure~\ref{fig:battery_tension_form} sampled during cruise motion ($t = \text{15:57:11}$). At this point, the pack delivers a current of $I_{\text{bat}} = 3.0273\,\text{A}$ and exhibits an internal resistance of $R_{\text{int}} = 0.0535\,\Omega$. The theoretical ohmic sag evaluates to $\Delta V_{\text{ohmic}} = I_{\text{bat}} \cdot R_{\text{int}} = 3.0273\,\text{A} \times 0.0535\,\Omega = 0.16196\,\text{V} \approx 0.1619\,\text{V}$, exactly matching the dashboard's reported channel (\texttt{ohmic\_sag\_v} = $0.1619\,\text{V}$). Subtracting this drop from the open-circuit voltage $V_{\text{ocv}} = 23.2248\,\text{V}$ yields a theoretical terminal voltage of $V_{\text{bat},\text{calc}} = 23.2248\,\text{V} - 0.16196\,\text{V} = 23.06284\,\text{V} \approx 23.0629\,\text{V}$, coinciding with \texttt{v\_bat\_calc} ($23.0629\,\text{V}$) to four decimal places. The measured terminal voltage reported by telemetry is $V_{\text{bat},\text{meas}} = 23.0938\,\text{V}$ (\texttt{v\_bat\_meas}), differing by only $0.0309\,\text{V}$ (a relative error of $0.13\%$). This minor discrepancy is completely bounded by the simulated 12-bit ADC quantization step ($\approx 7.8\,\text{mV}$) and the battery voltage sensor Gaussian noise ($\sigma_v = 0.03\,\text{V}$). Dynamically, the panel demonstrates the expected electrochemical response: while idling ($I_{\text{bat}} \approx 0.5\,\text{A}$), the ohmic drop remains minimal and $V_{\text{bat}} \approx V_{\text{ocv}}$; under cruise load ($I_{\text{bat}} \approx 3.0\,\text{A}$), terminal voltage experiences a sustained sag of $\approx 0.16\,\text{V}$; and during acceleration surges ($I_{\text{bat}} \approx 6.8\,\text{A}$), the ohmic dip deepens to $\approx 0.36\,\text{V}$ before recovering, fully validating the ECM implementation.
 \physfig{battery_tension_form}{Battery tension form, with all terms}
-
-\begin{enumerate}
-    \item \textbf{Current peak during acceleration, followed by a cruise plateau.}
-    Issuing the order produces an armature current, \texttt{motor\_current}, of
-    approximately $8.6~\mathrm{A}$ lasting two seconds, after which the signal settles
-    on a plateau of about $3.3~\mathrm{A}$ that it does not leave while the vehicle
-    travels at cruise. The pack current, \texttt{battery\_current\_a}, traces the
-    same profile at a lower amplitude, the ratio between the two channels not being
-    constant because it depends on the voltage the converter applies to the armature, as
-    discussed in the battery subsection. The peak is the accelerating
-    load of Equation~\eqref{eq:torque_balance}: the vehicle goes from $0$ to
-    $1.0~\mathrm{m/s}$ at $0.5~\mathrm{m/s^2}$, and both the inertial and the rolling
-    terms of the load torque are paid for with armature current. The plateau is the same
-    equation with the inertial term cancelled. This two-second profile is not
-    the electrical transient of the machine: the armature circuit has an inductance and a
-    resistance whose quotient, $L_{\mathrm{a}}/R_{\mathrm{a}} \approx 40~\mathrm{ms}$,
-    is the time the current needs to reach the value demanded by the drive. That interval
-    is twenty-five times shorter than the one second between samples, so the transient is
-    completed inside a single sample and cannot appear in the plot; its absence is a
-    property of the sampling rate, not evidence that the armature inductance is missing
-    from the model.
-
-    \physfig{armature_current_and_bus_voltage_arranque_crucero}{Armature current at start-up: an approximately
-    $8.6~\mathrm{A}$ peak during the two-second acceleration ramp followed by a
-    $3.3~\mathrm{A}$ cruise plateau.}
-
-    \item \textbf{Motor speed reaching the value imposed by the transmission.}
-    The measured speed goes from $0$ to $100~\mathrm{rad/s}$ in the same two seconds and
-    then stays flat. The value of the plateau is the relevant evidence, not its shape:
-    it is $\omega_{\mathrm{m}} = i_{\mathrm{g}}\, v / r_{\mathrm{w}} = 10 \times
-    1.0~\mathrm{m/s}\,/\,0.10~\mathrm{m} = 100~\mathrm{rad/s}$: the wheel turns at
-    $10~\mathrm{rad/s}$ and the gearbox multiplies that speed by ten, which is the
-    kinematic relation stated in Section~\ref{sec:source_system_simulation}. A plateau at any other
-    value would mean that the wheel radius or the gearbox ratio published in the
-    configuration is not the one the model uses.
-
-    \physfig{motor_speed_back_EMF_arranque_crucero}{Motor angular velocity and back-EMF during start-up and cruise: the speed reaches
-    $100~\mathrm{rad/s}$ in two seconds, and the back-EMF reaches $19.00~\mathrm{V}$ during cruise.}
-
-    \item \textbf{Back-electromotive force proportional to speed.}
-    As soon as the speed reaches its plateau, \texttt{back\_emf\_v} sticks to
-    $19.00~\mathrm{V}$. The check consists of dividing the reported quantity by
-    $K_{\mathrm{e}} \omega_{\mathrm{m}}$: the measured ratio is $1.0001$, that is,
-        Equation~\eqref{eq:motor_back_emf} holds with the configured constant and is not
-    being emulated from a different quantity. This observation is supported by the same
-    panel used for the speed check, \figurename~\ref{fig:motor_speed_back_EMF_arranque_crucero}.
-
-    \item
- \textbf{Torque consistent with current after removing the standby draw.}
-    The reported torque has to satisfy $\tau_{\mathrm{m}} = K_{\mathrm{t}}
-    (I_{\mathrm{m}} - I_{\mathrm{q}})$; at the measured cruise current of
-    $3.33~\mathrm{A}$ this yields $0.57~\mathrm{N\,m}$, which is the value on the plot.
-    Subtracting $I_{\mathrm{q}}$ is not a correction applied after the fact: the
-    Hall-effect transducer of the model sees the standby consumption of the drive
-    together with the armature current, so a torque computed from the raw current would
-    be systematically biased. This is the discrete counterpart of
-    Equation~\eqref{eq:electromagnetic_torque}.
-
-    \physfig{motor_torque_crucero}{Electromagnetic torque against armature current. The slope
-    matches $K_{\mathrm{t}}$ once the $0.35~\mathrm{A}$ standby draw of the drive is
-    removed from the measured current.}
-
-    \item \textbf{Shaft power equal to torque times speed.}
-    The power channel reads about $57~\mathrm{W}$ at cruise, which is
-    $0.57~\mathrm{N\,m} \times 100~\mathrm{rad/s}$. This closes the energy chain between
-    the mechanical and the electrical channels and rules out that power is generated
-    independently from torque and speed, as shown in
-    \figurename~\ref{fig:motor_torque_crucero}.
-
-    \item \textbf{Current is a band, not a line.}
-    The cruise armature
-    current, \texttt{motor\_current}, is a band of roughly $\pm 0.08~\mathrm{A}$ around
-    its $3.3~\mathrm{A}$ plateau; the standard deviation measured over the reference run
-    is $0.082~\mathrm{A}$ against the $0.08~\mathrm{A}$ configured for the current
-    transducer, the small excess being the twelve-bit quantisation of an eighty-ampere
-    range, one least significant bit being $19.5~\mathrm{mA}$. This is the evidence that the sensor
-    conditioning layer (Gaussian noise, analogue-to-digital conversion and drift) is
-    active on the published signal. Two opposite defects are ruled out at once: a band
-    clearly wider than configured, which would indicate that fault ripple or a wrong
-    noise scale is leaking into healthy data, and a perfectly straight line, which would
-    mean the conditioning layer has been bypassed and the training set would be
-    unrealistically clean, as observed in
-    \figurename~\ref{fig:armature_current_and_bus_voltage_arranque_crucero}.
-
-    \item \textbf{Vibration rises with travel, not with command.}
-    The channel reports the root-mean-square acceleration of the chassis in units of
-    $g$, the scalar an accelerometer with an internal RMS stage publishes for each
-    measuring window; the waveform itself does not travel in the state message. In the
-    model that scalar is driven by the quantities that excite the chassis: an idle floor
-    of $0.02~\mathrm{g}$, a rolling term of $0.15~\mathrm{g}$ per $\mathrm{m/s}$ of
-    speed actually made good over the ground, the fault-driven terms described in
-    Section~\ref{sec:source_system_simulation} and the noise of the transducer, with a dispersion of
-    $0.025~\mathrm{g}$. At the cruise speed of $1.0~\mathrm{m/s}$ the expected value is
-    $0.02 + 0.15 \times 1.0 = 0.17~\mathrm{g}$, about $1.7~\mathrm{m/s^2}$, and the
-    reading has to be interpreted as a distribution around that mean rather than as a
-    level: single samples between $0.12$ and $0.22~\mathrm{g}$ are normal-
-
-    \physfig{vibration_rise_arranque}{Chassis RMS vibration: $0.02~\mathrm{g}$ idle
-    floor at standstill and a $0.17~\mathrm{g}$ mean, with the $0.025~\mathrm{g}$
-    dispersion of the transducer, while travelling; the rise follows the speed.}
-\end{enumerate}
-
-\subsection{Thermal Behaviour}
-
-\begin{enumerate}
-    \item \textbf{Winding temperature rises with a curve towards a predictable
-    equilibrium.}
-    The winding starts at the ambient temperature of $22.0~^{\circ}\mathrm{C}$ and climbs
-    to $35.1~^{\circ}\mathrm{C}$ along the seven hundred seconds of travel of the
-    reference run. The quantity that has to be evaluated is neither the average slope,
-    which depends on how much of the curve was recorded, nor the peak value, but the pair
-    formed by the time constant and the asymptote. Fitting the response of a first-order
-    node, $T(t) = T_{\infty} + (T_0 - T_{\infty})\,e^{-(t-t_0)/\tau_{\mathrm{th}}}$,
-    to the samples stored in the historian yields $\tau_{\mathrm{th}} = 211~\mathrm{s}$
-    and $T_{\infty} = 35.6~^{\circ}\mathrm{C}$, with a residual dispersion of
-    $0.05~\mathrm{K}$, which is the noise of the thermistor and nothing else. Both fitted
-    parameters correspond to an expression of the model: the time constant is
-    $R_{\mathrm{th}} C_{\mathrm{th}} = 2.5 \times 80 = 200~\mathrm{s}$, and the
-    asymptote is the ambient temperature plus the dissipated power times the thermal
-    resistance, $22.0 + 5.4 \times 2.5 = 35.5~^{\circ}\mathrm{C}$, for the
-    $0.45~\mathrm{W}$ of copper loss and $5.0~\mathrm{W}$ of iron loss of this operating
-    point. The criterion that can be applied by hand on the panel is the sixty-three
-    percent rule: the temperature has to have covered $0.63 \times 13.6 = 8.6~\mathrm{K}$
-    of the $13.6~\mathrm{K}$ span after one time constant, which means crossing
-    $30.6~^{\circ}\mathrm{C}$ two hundred seconds after the drive is loaded. A rise that
-    were linear, or that reached its plateau within one or two samples, would invalidate
-    the thermal node.
-
-    \physfig{temperature_meseta}{Winding temperature during the capture run: exponential
-    rise from the ambient $22.0~^{\circ}\mathrm{C}$ to $35.1~^{\circ}\mathrm{C}$, with
-    a fitted time constant of $211~\mathrm{s}$ and a fitted asymptote of
-    $35.6~^{\circ}\mathrm{C}$ against the $35.5~^{\circ}\mathrm{C}$ predicted by
-    $T_{\mathrm{amb}} + P R_{\mathrm{th}}$.}
-
-    \item \textbf{Cooling with the same exponent, not with the mirror curve.}
-    Heating and cooling are not mirror images and must not be compared by eye: the heating
-    branch approaches the equilibrium of the operating point, $35.5~^{\circ}\mathrm{C}$,
-    whereas the cooling branch approaches the ambient $22.0~^{\circ}\mathrm{C}$, where
-    no loss is being generated, so the two have different asymptotes and the piece
-    of each one that appears on the panel depends on how long the vehicle ran. What has to
-    be identical in both directions is the exponent. Once the order is finished, the
-    temperature falls from $35.1$ to $22.15~^{\circ}\mathrm{C}$ in twenty-two minutes,
-    and the same fit returns $\tau_{\mathrm{th}} = 208~\mathrm{s}$ against the
-    $211~\mathrm{s}$ of the heating branch, with the same $0.05~\mathrm{K}$ residual: one
-    single lumped node losing heat through a fixed resistance heats and cools with the same
-    time constant in both directions, as it must. Without fitting, the equivalent criterion
-    is that after one time constant the cooling has covered $63~\%$ of the distance to the
-    ambient, near $26.9~^{\circ}\mathrm{C}$, and that the logarithm of that distance is a
-    straight line of slope $-1/\tau_{\mathrm{th}}$ on both branches. A temperature
-    collapsing to the ambient in one or two seconds would mean that the thermal state is
-    being overwritten instead of integrated.
-
-    \physfig{temperature_godown}{Winding and pack temperature over a complete mission.
-    The cooling of the winding goes from $35.1$ to $22.15~^{\circ}\mathrm{C}$ with a
-    fitted time constant of $208~\mathrm{s}$, indistinguishable from the $211~\mathrm{s}$
-    of the heating branch and with a residual equal to the noise of the thermistor, while
-    the pack channel stays close to the ambient along the whole record.}
-
-    \item \textbf{The battery node is deliberately sluggish.}
-    The pack is a second, far more inert thermal node: its time constant is
-    $R_{\mathrm{bat}} C_{\mathrm{bat}} = 8 \times 900 = 7200~\mathrm{s}$, one hour and
-    fifty minutes against the $200~\mathrm{s}$ of the winding, and its only heat source is
-    $I_{\mathrm{bat}}^2 R_{\mathrm{int}}$, which at the cruise current amounts to
-    $0.32~\mathrm{W}$ and therefore to an equilibrium only $2.6~\mathrm{K}$ above the
-    ambient. Eleven minutes of travel cover $1 - e^{-660/7200} = 8.8~\%$ of that span, so
-    the expected drift is $+0.23~\mathrm{K}$, and the historian shows exactly that: from
-    $22.02$ to $22.25~^{\circ}\mathrm{C}$ along the reference mission, followed by an
-    equally slow retreat towards the ambient once the drive is switched off, visible in
-    \figurename~\ref{fig:temperature_godown} as the nearly flat lower trace. The comparison between
-    both channels is the assertion: a pack rising by several kelvin in a few minutes would
-    mean the two nodes are exchanged or that the losses are injected in the wrong place,
-    and a pack frozen at a constant value would mean the thermal state of the battery is
-    not being integrated. The drift matters beyond its own check because the internal
-    resistance of the pack is temperature dependent, so those $2.6~\mathrm{K}$ reduce the
-    ohmic sag of the terminal voltage by roughly $2.4~\%$ over a long mission, and because
-    it is the quantity on which the thermal degradation of the pack has to be judged.
-\end{enumerate}
-
-\subsection{Braking and Node Arrival}
-
-\begin{enumerate}
-    \item \textbf{Current falls to the standby value during braking, never below it.}
-    As the vehicle approaches a node, the reported longitudinal velocity ramps down and
-    the armature current drops from $3.3~\mathrm{A}$ to about $0.33~\mathrm{A}$, the
-    standby draw of the drive, in a single sample. The sign is what has to be checked:
-    the current must not become negative. The model does not implement regenerative
-    braking, so deceleration dissipates energy mechanically and the drive simply stops
-    demanding torque. A negative current on this plot would therefore be a defect, not a
-    feature.
-
-    \physfig{current_goes_down_break}{Velocity and armature current at node arrival: the
-    current returns to the standby level and never crosses into negative values.}
-
-    \item \textbf{Vibration and DC-link voltage recover in the same second.}
-    The vibration returns to the $0.02~\mathrm{g}$ idle floor, mean value and same
-    dispersion as above, in the same second in which the velocity reaches zero, because
-    the excitation of the accelerometer model is the speed made good over the ground. The
-    DC-link voltage also steps back up as soon as the load is removed, but this second
-    recovery is not legible on the raw trace and should not be looked for there: the
-    magnitude of the step is $120~\mathrm{mV}$, whereas the accelerated discharge moves
-    the open-circuit voltage of the pack by $53~\mathrm{mV}$ for every minute of travel,
-    in the same direction before and after the stop, so the load step is buried under a
-    trend four times faster than itself.
-
-    \physfig{vibration_reach_default_break}{Vibration and DC-link voltage at standstill
-    recovery. The vibration collapses to its idle floor in one sample; the voltage
-    recovery of $120~\mathrm{mV}$ is masked by the $53~\mathrm{mV}$ per minute decline of
-    the open-circuit voltage.}
-\end{enumerate}
-
-\subsection{Battery}
-
-\begin{enumerate}
-    \item \textbf{State of charge decreases linearly.}
-    The state of charge follows a straight ramp downwards of about two percent per
-    minute; the reference run consumed $7.5~\%$ in three minutes. The slope is constant
-    because the cruise current is constant and the charge is integrated by Coulomb
-    counting, and because the discharge rate used in the demonstration configuration is
-    accelerated by an intentional factor of twenty to make a mission-sized drain visible
-    in a few minutes of observation. That factor multiplies elapsed time only, so it
-    changes how fast the ramp runs but not its linearity, and it must be reported
-    together with the slope whenever the value is quoted.
-
-    \physfig{battery_linear_discharge}{State of charge during the capture run: linear discharge ramp,
-    measured with the accelerated demo discharge factor enabled.}
-
-    \item \textbf{Battery current is lower than armature current.}
-    The pack delivers $2.90~\mathrm{A}$ while the armature carries $3.33~\mathrm{A}$.
-    The ratio of about $0.8$ is the consequence of the converter: the armature is fed at
-    a voltage lower than the DC-link, so the current drawn from the pack is reduced by
-    approximately the same factor; the residual difference is the auxiliary consumption
-    of the on-board electronics and the standby draw of the drive, $0.50~\mathrm{A}$ in
-    the configuration used, which flows from the pack without passing through the
-    armature. The ratio is therefore load dependent: it approaches one at high speed,
-    when the converter applies nearly the full bus voltage to the armature, and it
-    becomes much smaller during a start-up, when the armature voltage is low. A ratio close to one, or a battery current larger than the
-    armature current while travelling, would break the energy balance of the model.
-
-    \physfig{battery_current_lower_motor_current}{Battery current against armature current during
-    cruise; the ratio reflects the converter voltage transformation plus the auxiliary
-    consumption.}
-
-    \item \textbf{Terminal voltage is consistent with the equivalent circuit.}
-    Equation~\eqref{eq:battery_ecm} implies a drop of about $150~\mathrm{mV}$ from the
-    open-circuit value at the cruise current of $2.96~\mathrm{A}$, and therefore a step of
-    about $120~\mathrm{mV}$ between the loaded and the unloaded level. That step is not
-    legible on the raw trace and no figure is offered for it: the accelerated discharge of
-    the demonstration configuration drags the open-circuit voltage downwards at
-    $53~\mathrm{mV}$ per minute of travel, four times faster than the step itself and
-    undisturbed by the switching of the drive, so recovering the identity from the panels
-    would require compensating the state of charge analytically. The arithmetic of the
-    equivalent circuit, including the relaxation of the polarisation branch with the time
-    constant $R_{\mathrm{p}} C_{\mathrm{p}} = 300~\mathrm{s}$, is asserted in the
-    automated test suite of the simulator, which exercises the battery model directly, and
-    is deliberately left out of the manual inspection reported here.
-\end{enumerate}
 
 \subsection{Interpretation and Limitations}
 

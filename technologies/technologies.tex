@@ -1,7 +1,57 @@
 % !TeX root = ../main.tex
 \chapter{Technologies}
 \label{chap:technologies}
-\section{MQTT Broker: Mosquitto}
-An MQTT message broker is a central component that enables communication between clients and IoT devices using the MQTT protocol. It follows the publish-subscribe (pub/sub) messaging model, which plays a crucial role in managing MQTT connections and performing data transmission. The broker receives messages from publishers, verifies their publishing rights, and queues messages according to their Quality of Service (QoS) levels. It further identifies authorised subscribers and routes them to appropriate subscribers.
+\section{Git}
+Git is a free, open source distributed version control system. It prioritises speed and efficiency, handling projects of any size while keeping the complete history of every change made to the code base~\cite{git}.
 
-Eclipse Mosquitto is an open source (EPL/EDL licensed) message broker that implements the MQTT protocol versions 5.0, 3.1.1 and 3.1. Mosquitto is lightweight and is suitable for use on all devices from low power single board computers to full servers.\cite{eclipse_mosquitto}
+Due to the continuous deployment nature of the project, this was the most suitable version control system.
+
+\section{Bitbucket}
+Bitbucket is a Git-based code hosting and collaboration platform built for development teams. It brings together code review, automated testing and confident deployment in a single place, and it integrates natively with Jira and Trello so that the whole software team can coordinate around a shared project~\cite{bitbucket}.
+
+The industrial partner uses Bitbucket internally, so its adoption was treated as a non-functional requirement of the project.
+
+\section{Jira}
+Jira is a project management tool that helps teams of any size plan, track and deliver work. It allows breaking large goals into manageable tasks, clarifying who is doing what and by when, and keeping everyone aligned around a single source of truth~\cite{jira}.
+
+This tool is useful for the student to keep a clear map of the whole development and writing process of the system.
+
+\section{Docker}
+Docker is a suite of products that leverages operating-system-level virtualization to deliver software in lightweight packages called containers. It automates application deployment so that workloads run consistently across different computing environments~\cite{docker}.
+
+This allowed the system to be split into well differentiated microservices, each packaged and deployed independently.
+
+\section{Visual Studio Code}
+Visual Studio Code is an editor developed by Microsoft, available on Windows, Linux, macOS and web browsers. It provides debugging support, syntax highlighting, intelligent code completion, snippets, code refactoring and built-in version control through Git. Its look and behaviour can be tailored through themes, keyboard shortcuts and preferences, and its functionality can be extended with plugins, including turning it into a full IDE for other programming languages~\cite{vscode}.
+
+\section{MQTT Broker: Mosquitto}
+An MQTT message broker is the central component that enables communication between clients and IoT devices over the MQTT protocol. It works on a publish-subscribe (pub/sub) messaging model: the broker receives messages from publishers, validates their publishing rights, queues them according to their Quality of Service (QoS) level and routes them to the authorized subscribers.
+
+Eclipse Mosquitto is an open source (EPL/EDL licensed) message broker implementing MQTT protocol versions 5.0, 3.1.1 and 3.1. Its lightweight footprint makes it suitable for any device, from low power single board computers to full servers~\cite{eclipse_mosquitto}.
+
+\section{Diagrams: Draw.io}
+Draw.io is an open source graph drawing application. It is used to translate the ideas and the architecture of the system into diagrams that can be documented on paper~\cite{drawio}.
+
+\section{Data Streaming Platform: Redpanda}
+Redpanda is a data streaming platform compatible with the Apache Kafka API\cite{kafka_api} that delivers fault-tolerant message streaming with a simpler architecture and lower latency. In this project it acts as the central event bus that decouples the producers of telemetry data from the downstream consumers~\cite{redpanda}.
+
+\section{Apache Spark}
+Apache Spark is a unified analytics engine for large-scale data processing. It offers high-level APIs in Java, Scala, Python and R on top of an optimized engine capable of executing general execution graphs. Its ecosystem includes Spark SQL for SQL and structured data processing, the pandas API on Spark for pandas workloads, MLlib for machine learning, GraphX for graph processing, and Structured Streaming for incremental computation and stream processing~\cite{apache_spark}.
+
+\section{Apache Iceberg}
+Apache Iceberg is an open table format built for large analytical datasets stored in data lakes. Instead of treating the lake as a plain collection of files, Iceberg manages them as real tables, adding database-like capabilities such as schema evolution, time travel and more efficient query planning on top of object storage. This improves the reliability, performance and flexibility of modern data architectures, letting analysts, data scientists and engineers work with data lake data more easily~\cite{apache_iceberg}.
+
+\section{S3 Garage}
+Garage is a lightweight, geo-distributed data store that implements the Amazon S3 object storage protocol. It lets applications store large blobs such as pictures, videos or documents in a redundant multi-node setup, and the S3 API is versatile enough to also serve static websites~\cite{garage}.
+
+This technology provides the storage layer where the Iceberg tables will be persisted, enabling the construction of the Data Lakehouse.
+
+\section{Time Series Database: QuestDB}
+QuestDB is an open source time-series database engineered for low latency. Its column-oriented, time-partitioned storage engine, together with memory-mapped files and vectorized (SIMD) execution, supports high-throughput ingestion and millisecond-level analytical queries. SQL is extended with time-series operators such as SAMPLE BY, LATEST ON and ASOF JOIN~\cite{questdb}.
+
+Due to the nature of the telemetry data, this database is optimal for the purpose of the application and for connecting with the observation layer, Grafana.
+
+\section{Grafana}
+Grafana open source software allows querying, visualizing, alerting on and exploring metrics, logs and traces wherever they are stored. It provides the tools to turn time-series database (TSDB) data into insightful graphs and visualizations, and its plugin framework can also connect other data sources such as NoSQL/SQL databases, ticketing tools like Jira or ServiceNow, and CI/CD tooling like GitLab~\cite{grafana}.
+
+This enables the observation part of the application, acting as the end application that the worker will see.

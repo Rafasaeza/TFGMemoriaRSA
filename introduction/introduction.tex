@@ -4,7 +4,7 @@
 
 \section{Motivation}
 Industry 4.0 is no longer just a concept, but a reality transforming factories worldwide. 
-The arrival of these emerging technologies opens up vast opportunities to optimize production processe, shifting the focus from mere automation toward creating truly intelligent factories.
+The arrival of these emerging technologies opens up vast opportunities to optimize production processes, shifting the focus from mere automation toward creating truly intelligent factories.
 
 A key enabler of Industry 4.0 is the deployment of Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs), which are capable of navigating autonomously through factories, warehouses, and complex environments. 
 
@@ -21,7 +21,7 @@ Because these vehicles play a vital role in production, any failure can paralyze
 Studies reveal that unexpected downtime can range from \$36,000 per hour in fast-moving consumer goods to upwards of \$2.3 million per hour in the automotive sector \cite{siemens2024Cost}. 
 Consequently, preventing such disruptions is not merely an operational challenge, but a critical financial priority for modern manufacturers.
 
-A promising solution to this challenge is predictive maintenance, which can significantly reduce vehicle failures and the associated costs of unplanned downtime. 
+A promising solution to this challenge is predictive maintenance using machine learning, which can significantly reduce vehicle failures and the associated costs of unplanned downtime. 
 The literature on machine learning for anomaly detection is extensive, however, a significant gap remains between theoretical studies and real-world implementation, as researchers encounter major hurdles when scaling proposed solutions to production environments \cite{paleyes2022challenges}.
 
 Through a review of this literature, four key limitations emerge as critical factors when developing a real-time anomaly detection system for AGVs and AMRs \cite{benecki2024agv}:
@@ -46,10 +46,10 @@ To achieve this overarching goal, the project is structured into five specific t
     Due to hardware constraints and limited access to physical AGVs, utilizing real industrial data is often unfeasible. Therefore, a Rust-based VDA 5050 simulator is to be adapted to generate realistic telemetry streams. The simulation is extended beyond pure protocol compliance to model real-world robot physics and key health metrics, including motor current, motor voltage, motor temperature, linear velocity, and battery state. Generative AI tool(Claude Sonnet 5.0) is to be leveraged to assist in extending the Rust codebase.
 
     \item \textbf{Real-Time Data Pipeline Implementation:} 
-    To process raw telemetry streams before they reach downstream machine learning components, Apache Spark is used to ingest raw streams, cleanse null fields, append ingestion timestamps, and standardize data structures. Cleaned events are to be published to a Redpanda event broker. This Kafka-compatible streaming layer decouples system modules, allowing independent producers and consumers to interact seamlessly.
+    To process raw telemetry streams before they reach downstream machine learning components, Apache Spark\cite{apache_spark} is used to ingest raw streams, cleanse null fields, append ingestion timestamps, and standardize data structures. Cleaned events are to be published to a Redpanda\cite{redpanda} event broker. This Kafka-compatible streaming layer decouples system modules, allowing independent producers and consumers to interact seamlessly.
 
     \item \textbf{Data Lakehouse and Medallion Architecture\cite{dey2026lakehouse}:} 
-    To ensure scalable, long-term persistence, a Data Lakehouse paradigm is adopted. It combines the cost-effective storage of object repositories (S3-compatible bucket) with the structured, ACID-compliant query capabilities of Apache Iceberg. Data is to be organized following a Medallion Architecture:
+    To ensure scalable, long-term persistence, a Data Lakehouse paradigm is adopted. It combines the cost-effective storage of object repositories (S3-compatible Garage bucket\cite{garage}) with the structured, ACID-compliant query capabilities of Apache Iceberg\cite{apache_iceberg}. Data is to be organized following a Medallion Architecture:
     \begin{itemize}
         \item \textbf{Bronze Layer:} To store raw, unprocessed telemetry streams exactly as received.
         \item \textbf{Silver Layer:} To contain cleaned, validated, and enriched data with added ingestion metadata.
@@ -60,7 +60,7 @@ To achieve this overarching goal, the project is structured into five specific t
     Serving as the core analytical engine, this component focuses on unsupervised anomaly detection using deep learning frameworks (PyTorch). Following a review of current methodologies, a deep learning model (e.g., Autoencoder) is to be deployed to detect subtle telemetry deviations. Furthermore, the objective extends beyond raw mathematical score calculation to map detected anomalies to clear, non-ambiguous diagnostic labels for human interpretability.
 
     \item \textbf{Visualization and Monitoring Layer:} 
-    To present actionable insights to operational staff, telemetry and anomaly scores are to be persisted in QuestDB, a high-performance time-series database. Grafana dashboards then query QuestDB to display real-time metrics, system health status, and historical anomaly alerts.
+    To present actionable insights to operational staff, telemetry and anomaly scores are to be persisted in QuestDB\cite{questdb}, a high-performance time-series database. Grafana\cite{grafana} dashboards then query QuestDB to display real-time metrics, system health status, and historical anomaly alerts.
 \end{enumerate}
 
 This multi-layered approach not only supports live monitoring, but through the Medallion Architecture and Iceberg time-travel capabilities, it allows historical raw data (Bronze layer) to be reprocessed whenever model architectures or machine learning requirements evolve.
@@ -91,4 +91,26 @@ Furthermore, the operational scope of this project is subject to several specifi
 \end{itemize}
 \input{methodology/methodology}
 \section{Document structure}
-To be done\dots
+\label{sec:document_structure}
+
+This document is organized into eight main chapters, including this introductory chapter, followed by two supplementary appendices that provide practical guides for system deployment and operation:
+
+\begin{enumerate}
+    \item \textbf{Introduction (Chapter~\ref{chap:introduction}):} Provides an overview of the industrial motivation within Industry~4.0 and autonomous mobile robotics, formalizes the overarching and specific technical objectives of the project, establishes the industrial collaboration with EDAG and the Metys project, delimits the operational scope and constraints, details the hybrid software engineering methodology (combining plan-driven design with agile Scrum sprints), and outlines the structural organization of this work.
+    
+    \item \textbf{Technologies (Chapter~\ref{chap:technologies}):} Offers a comprehensive summary of the technological stack, libraries, and frameworks employed across the development lifecycle, spanning container orchestration, edge IoT messaging protocols (MQTT and Mosquitto), distributed event streaming, Data Lakehouse technologies, and deep learning platforms.
+    
+    \item \textbf{State of the Art (Chapter~\ref{chap:state_of_the_art}):} Establishes the theoretical foundation and literature review supporting this research, covering deep anomaly detection paradigms, recurrent autoencoder architectures (GRU-AE), explainable root-cause analysis via residual decomposition, physics-informed synthetic telemetry generation, and scalable real-time Data Lakehouse paradigms structured around the Medallion architecture and Apache Iceberg.
+    
+    \item \textbf{Requirements Analysis and Specification (Chapter~\ref{chap:requirements_analysis}):} Need to be done.
+    
+    \item \textbf{System Architecture Design (Chapter~\ref{chap:system_architecture}):} Need to be done.
+    
+    \item \textbf{System Implementation (Chapter~\ref{chap:system_implementation}):} Need to be done.
+    
+    \item \textbf{Testing and Evaluation (Chapter~\ref{chap:testing_evaluation}):} Need to be done.
+    
+    \item \textbf{Conclusions and Future Work (Chapter~\ref{chap:conclusions}):} Synthesizes the achieved results and key findings relative to the initial technical objectives, reviews lessons learned from the industrial collaboration, and outlines prospective lines of future research and technical enhancements.
+    
+    \item \textbf{Appendices (Appendices~\ref{app:installation_manual} and~\ref{app:user_manual}):} Contain supporting operational documentation, comprising Appendix~\ref{app:installation_manual} (Installation Manual), which details environment prerequisites, container orchestration, and deployment steps, and Appendix~\ref{app:user_manual} (User Manual), which provides instructions for sending orders and instant actions, simulating anomalies, monitoring Grafana dashboards, and inspecting real-time telemetry.
+\end{enumerate}
