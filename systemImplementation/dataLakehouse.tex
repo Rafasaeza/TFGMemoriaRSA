@@ -1,0 +1,62 @@
+\section{Data Lakehouse Layer Implementation}
+\label{sec:data-lakehouse-implementation}
+
+\textit{(TO BE COMPLETED: Overview of the Data Lakehouse implementation, storage topology, and integration between object storage and modern table formats).}
+
+\subsection{S3-Compatible Object Storage: MinIO}
+\label{subsec:minio-s3-implementation}
+
+The object storage tier was implemented using \textbf{MinIO}, an open-source, high-performance distributed object storage server fully compatible with the Amazon S3 API. In this architecture, MinIO serves as the primary persistence layer for storing raw Bronze Parquet files and managing streaming checkpoints for Apache Spark.
+
+Two services are defined within the Docker Compose deployment:
+\begin{itemize}
+    \item \textbf{MinIO Server (\texttt{minio}):} Runs the core object storage engine, persisting data in a dedicated Docker volume (\texttt{minio-data}). The S3 API operates on container port \texttt{9000}, which is mapped to host port \texttt{19000} to prevent host port collisions with QuestDB. The interactive web console is exposed on host port \texttt{9001}. A container health check probes \texttt{/minio/health/live} to guarantee service availability before downstream consumers initiate requests.
+    \item \textbf{Bucket Provisioning (\texttt{createbuckets}):} A lightweight initialization container using the MinIO Client (\texttt{minio/mc}) CLI. It waits for the MinIO server to report a healthy status, configures a local connection alias, and automatically provisions the target bucket (\texttt{lakehouse}) using \texttt{mc mb --ignore-existing}. Once bucket creation succeeds, the container terminates cleanly.
+\end{itemize}
+
+Both services are attached to the \texttt{lakehouse-net} network, ensuring secure, isolated network communication with the Spark stream processing tier.
+
+\begin{lstlisting}[language=yaml, caption={MinIO Docker Compose configuration}, label={lst:minio-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123456
+    volumes:
+      - minio-data:/data
+    ports:
+      - "19000:9000"
+      - "9001:9001"
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 admin admin123456;
+      mc mb --ignore-existing local/lakehouse;
+      exit 0;
+      "
+    networks:
+      - lakehouse-net
+
+volumes:
+  minio-data:
+\end{lstlisting}
+
+\subsection{Table Format Implementation: Apache Iceberg}
+\label{subsec:iceberg-implementation}
+
+\textit{(TO BE COMPLETED: Apache Iceberg catalog configuration, table schema definition, and partitioning strategy across Bronze, Silver, and Gold tiers).}
