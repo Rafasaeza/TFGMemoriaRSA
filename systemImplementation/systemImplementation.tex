@@ -1,15 +1,731 @@
 % !TeX root = ../main.tex
 \chapter{System Implementation}
 \label{chap:system_implementation}
-\input{systemImplementation/introduction.tex}
-\input{systemImplementation/dockerizeSystem}
-\input{systemImplementation/MQTTBroker.tex}
-\input{systemImplementation/redpandaKafka.tex}
-\input{systemImplementation/sparkProcessing.tex}
-\input{systemImplementation/dataLakehouse.tex}
-\input{systemImplementation/SourceSystemSimulation.tex}
-\input{systemImplementation/physicalModelingFramework.tex}
-\input{systemImplementation/syntheticDatasetGeneration.tex}
-\input{systemImplementation/ingestionDataPipeline}
-\input{systemImplementation/aiAnomalyDetection}
 
+\section{Introduction}
+\label{sec:system_implementation_intro}
+As discussed in Chapter~\ref{chap:system_architecture}, the proposed solution follows an end-to-end streaming architecture composed of multiple interconnected layers. 
+
+While the previous chapter focused on the architectural design decisions and the rationale behind the selected technologies, this chapter presents the practical implementation of the system. First, Section~\ref{sec:implementation_methodology} introduces the implementation methodology, version control practices, and continuous integration workflows. Subsequently, the implementation details of each architectural layer are described, together with the deployment strategy, service integration mechanisms, and the technologies used to establish communication between components. 
+
+Finally, the chapter explains how the different layers are combined to form a complete data pipeline, from telemetry generation at the source systems to data storage and downstream analytics.
+
+\section{Implementation Methodology}
+\label{sec:implementation_methodology}
+
+Translating the high-level architectural design presented in Chapter~\ref{chap:system_architecture} into an operational platform requires establishing a structured implementation methodology. The proposed solution constitutes a distributed and heterogeneous system that spans physical vehicle simulation engines written in Rust, IoT edge messaging brokers, distributed stream processors powered by Apache Spark, cloud-native lakehouse storage tiers, and deep learning models built in PyTorch. Managing such a multi-technology platform demands disciplined software engineering and DevOps practices to guarantee reproducibility, traceability, and seamless interoperability between components.
+
+\subsection{Distributed Version Control and Commit Traceability}
+Modern software engineering relies on distributed version control to record changes, maintain history, and coordinate technical iterations. In this project, Git~\cite{git} was selected as the central version control system, hosted within the Bitbucket~\cite{bitbucket} repository infrastructure of the industrial partner.
+
+Rather than using version control solely as a code repository, Git was employed as the operational backbone of the development lifecycle, providing comprehensive traceability across all system artifacts:
+\begin{itemize}
+    \item \textbf{Traceability of Architectural and Implementation Decisions:} Granular and semantic commits document why specific modifications were introduced, linking code changes directly to architectural requirements, bug fixes, or performance enhancements.
+    \item \textbf{Configuration and Environment Versioning:} All configuration files (e.g., Mosquitto configurations, simulator parameters, Spark properties), environment variables, and Docker infrastructure manifests are tracked under version control. This ensures that any past system state or experimental setup can be audited and reproduced deterministically.
+    \item \textbf{Branching Strategy and Experimental Isolation:} Feature branching was employed to isolate experimental work---such as the calibration of physical simulation parameters, modifications to Spark streaming transformations, or the training of deep learning architectures---preventing regressions in the primary codebase until integration criteria were satisfied.
+\end{itemize}
+
+\subsection{Continuous Integration and Automated Verification}
+Continuous Integration (CI) and Continuous Deployment (CD) principles were integrated into the development workflow to ensure that modifications to individual microservices do not destabilize the overall pipeline. The containerized design of the platform directly supports automated verification workflows:
+\begin{itemize}
+    \item \textbf{Automated Build Validation:} Because system components are containerized, automated build steps verify that Docker images can be built without errors, ensuring that third-party dependencies and compilation targets (such as the Rust-based vehicle simulator) remain consistent and pinned.
+    \item \textbf{Interface and Schema Verification:} Communication across layers relies on standardized protocols and schemas, particularly VDA~5050 JSON payloads and Redpanda streaming topics. Automated sanity tests and linting validate that schema definitions and data formatting remain compatible across producer and consumer services whenever changes are committed.
+    \item \textbf{Quality Assurance and Static Analysis:} Static code analysis, syntax checking, and formatting tools were applied across the various languages utilized in the project (Python, Rust, shell scripts, and configuration files) to enforce consistent code quality standards.
+\end{itemize}
+
+\subsection{DevOps and Reproducibility Considerations}
+In industrial environments and complex streaming applications, environment divergence between development, testing, and production represents a primary source of failure. To address this challenge, the implementation adopts DevOps principles centered on Infrastructure as Code (IaC) and container orchestration.
+
+By defining all services, volumes, health checks, and network boundaries within declarative Docker Compose manifests, the complete platform can be initialized deterministically on any compliant host system. This approach eliminates environment-specific discrepancies, streamlines local debugging, and lays the groundwork for automated deployment into industrial Kubernetes or edge cluster environments.
+
+\section{Containerized Deployment}
+\label{sec:containerized_deployment}
+Following the architectural decisions described in Chapter~\ref{chap:system_architecture}, all components were deployed as Docker containers. Containerization provides reproducibility, isolation of dependencies, and simplifies the deployment and maintenance of the platform. 
+
+\subsection{Docker Compose Organization} 
+To improve maintainability and modularity, the platform is organized as a collection of independent Docker Compose files. Each architectural layer maintains its own deployment definition, while a main \texttt{docker-compose.yml} file aggregates all services using the Docker Compose \texttt{include} directive. 
+
+This approach allows each subsystem to be developed and deployed independently while preserving a unified deployment strategy for the complete platform. 
+
+Listing~\ref{lst:main-compose} shows the complete root Docker Compose configuration used to orchestrate all subsystems, define CA certificates, and declare shared network boundaries.
+
+\begin{lstlisting}[language=yaml, caption={Root Docker Compose configuration}, label={lst:main-compose}, basicstyle=\ttfamily\small, breaklines=true]
+secrets:
+  ca_cert:
+    file: ./certs/edag-r1.crt
+
+include:
+  - docker/mqtt-broker/docker-compose.yml
+  - docker/source_systems/vda5050_vehicle_simulator/docker-compose.yml
+  - docker/redpanda/docker-compose.yml
+  - docker/source_systems/telegraf/docker-compose.yml
+  - docker/data-storage/questdb/docker-compose.yml
+  - docker/cross-cutting/docker-compose.yml
+  - docker/utils/sim-control-panel/docker-compose.yml
+  - docker/stream-processing/spark/docker-compose.yml
+  - docker/data-lakehouse/minio/docker-compose.yml
+
+networks:
+  lakehouse-net:
+    driver: bridge
+  redpanda-net:
+    driver: bridge
+  mqtt-net:
+    driver: bridge
+  questdb-net:
+    driver: bridge
+\end{lstlisting}
+
+\subsection{Network Segmentation} 
+Dedicated Docker bridge networks were created to isolate communication between system components. Rather than exposing every service to a common network, individual networks were assigned according to the communication requirements of each layer. 
+
+This strategy reduces unnecessary connectivity between containers and simplifies service discovery. Furthermore, it follows the principle of least privilege by restricting access only to the services required by each component. 
+
+The platform defines four segmented bridge networks:
+\begin{itemize}
+    \item \texttt{mqtt-net}: Dedicated to edge communication between simulated AGVs, the Eclipse Mosquitto broker, and the Telegraf ingestion agent.
+    \item \texttt{redpanda-net}: Connects the central distributed event streaming brokers, Telegraf producer, Spark streaming consumers, and Kafka Connect.
+    \item \texttt{lakehouse-net}: Dedicated to the analytical storage tier, connecting Spark stream processing with the MinIO S3 object store.
+    \item \texttt{questdb-net}: Isolates the operational time-series database, schema initialization containers, Kafka Connect sink, and Grafana monitoring dashboards.
+\end{itemize}
+
+Listing~\ref{lst:docker-networks} presents the network configuration defined at the root deployment level.
+
+\begin{lstlisting}[language=yaml, caption={Docker network configuration}, label={lst:docker-networks}, basicstyle=\ttfamily\small, breaklines=true]
+networks:
+  lakehouse-net:
+    driver: bridge
+  redpanda-net:
+    driver: bridge
+  mqtt-net:
+    driver: bridge
+  questdb-net:
+    driver: bridge
+\end{lstlisting}
+
+\section{MQTT Broker Implementation and Integration} 
+\label{sec:mqtt_broker_implementation}
+
+In the proposed architecture, Message Queuing Telemetry Transport (MQTT) serves as the lightweight edge messaging protocol connecting autonomous mobile robots to the data platform. As specified by the VDA~5050 standard, vehicle state and order messages are published over MQTT topics. To operationalize this layer within the containerized platform and bridge incoming edge traffic to the central event streaming backbone, the implementation comprises two cooperative services:
+\begin{enumerate}
+    \item \textbf{Eclipse Mosquitto:} An open-source, lightweight MQTT broker that acts as the ingress message gateway for robot telemetry.
+    \item \textbf{Telegraf Ingestion Bridge:} A dedicated, lightweight bridging agent that consumes raw VDA~5050 state payloads from Mosquitto, enriches them with routing metadata and Kafka headers, and publishes them into the central Redpanda event bus.
+\end{enumerate}
+
+\subsection{Eclipse Mosquitto Deployment and Broker Configuration}
+\label{subsec:mosquitto_implementation}
+
+The MQTT broker is implemented using Eclipse Mosquitto, deployed as a containerized service (\texttt{mosquitto}) on the dedicated Docker bridge network \texttt{mqtt-net}. The broker exposes standard port 1883 for unencrypted edge communication within the container environment.
+
+Listing~\ref{lst:mosquitto-conf} illustrates the broker configuration (\texttt{mosquitto.conf}). Persistence is disabled (\texttt{persistence false}) because message durability and fault tolerance are delegated to the central event streaming log (Redpanda). All log output is routed to \texttt{stdout} to integrate with Docker's logging drivers.
+
+\begin{lstlisting}[language=configToml, caption={Mosquitto configuration (mosquitto.conf)}, label={lst:mosquitto-conf}, basicstyle=\ttfamily\small, breaklines=true]
+persistence false
+log_dest stdout
+
+listener 1883 0.0.0.0
+allow_anonymous true
+\end{lstlisting}
+
+To prevent race conditions during stack initialization, a container health check is established in Listing~\ref{lst:mosquitto-docker-compose}. The probe uses \texttt{mosquitto\_pub} to publish a test message to a diagnostic topic every 5 seconds. Upstream telemetry producers (such as the vehicle simulator) and downstream consumers (such as Telegraf) utilize Docker's \texttt{condition: service\_healthy} dependency directive to ensure the broker is fully responsive before attempting connections.
+
+\begin{lstlisting}[language=yaml, caption={Mosquitto Docker Compose configuration}, label={lst:mosquitto-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-p", "1883", "-t", "healthcheck", "-m", "1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mqtt-net
+\end{lstlisting}
+
+\subsection{Telemetry Bridging via Telegraf}
+\label{subsec:telegraf_integration}
+
+A key architectural requirement is the clean decoupling between the edge MQTT protocol and the central Redpanda streaming tier. Because the MQTT boundary only requires protocol adaptation between MQTT and Kafka-compatible streams, Telegraf was selected as a dedicated telemetry ingestion agent.
+
+Telegraf operates as a dual-homed container attached simultaneously to \texttt{mqtt-net} and \texttt{redpanda-net}. This network topology enforces strict isolation: source systems and the MQTT broker remain in \texttt{mqtt-net} with zero direct exposure to the internal Kafka network, while Telegraf transparently forwards incoming payloads across the boundary.
+
+Listing~\ref{lst:telegraf-docker-compose} shows the Docker Compose configuration for the Telegraf bridging service.
+
+\begin{lstlisting}[language=yaml, caption={Telegraf Docker Compose configuration}, label={lst:telegraf-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  telegraf:
+    image: telegraf:1.39-alpine
+    restart: unless-stopped
+    command: telegraf --config /etc/telegraf/conf/telegraf.conf
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/conf/telegraf.conf:ro
+    environment:
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
+      KAFKA_BROKER: ${TELEGRAF_KAFKA_BROKER:-redpanda:9092}
+    networks:
+      - mqtt-net
+      - redpanda-net
+\end{lstlisting}
+
+The bridging logic is governed by three coordinated stages configured in \texttt{telegraf.conf} (Listing~\ref{lst:telegraf-conf}):
+\begin{enumerate}
+    \item \textbf{MQTT Telemetry Ingestion (\texttt{inputs.mqtt\_consumer}):} Telegraf subscribes to the VDA~5050 state topic hierarchy using the wildcard pattern \texttt{uagv/v2/+/+/state}, matching all vehicles across arbitrary manufacturers. Ingestion uses Quality of Service 1 (QoS~1) with persistent sessions, preventing telemetry loss during momentary network disconnects. Telemetry payloads are ingested as raw string values (\texttt{data\_format = "value"}) to prevent premature deserialization.
+    \item \textbf{Topic Parsing and Composite Key Generation (\texttt{processors.template}):} The hierarchical MQTT topic structure is parsed into semantic tags:
+    \begin{quote}
+        \texttt{\_/\_/source\_manufacturer/source\_serial\_number/message\_type}
+    \end{quote}
+    A processor template constructs a composite key \texttt{source\_asset\_key} formatted as \texttt{<manufacturer>:<serial\_number>} (e.g., \texttt{rikeb:s11}). This composite key serves as the Kafka message routing key (\texttt{routing\_tag}), guaranteeing two crucial properties in Redpanda:
+    \begin{itemize}
+        \item \emph{Collision avoidance:} AGVs from different manufacturers with identical serial numbers are unambiguously partitioned.
+        \item \emph{Chronological partition ordering:} Messages from the same physical asset consistently hash to the same Kafka partition, ensuring strict temporal order for downstream state reconstruction.
+    \end{itemize}
+    \item \textbf{Unmutated Kafka Publishing and Header Enrichment (\texttt{outputs.kafka}):} Telegraf publishes to the centralized \texttt{vda5050-state} topic in Redpanda. Crucially, the VDA~5050 JSON payload is emitted completely unmodified (\texttt{template = '\{\{ .Field "value" \}\}'}). Schema transformations and data validation are intentionally deferred to downstream Spark Structured Streaming jobs, preserving the raw data fidelity required for the Bronze lakehouse tier. Simultaneously, Telegraf appends enriched Kafka record headers (\texttt{source\_serial\_number}, \texttt{source\_manufacturer}, \texttt{source\_asset\_key}, \texttt{message\_type}, and \texttt{mqtt\_topic}), providing full protocol provenance to consumers without altering message bodies.
+\end{enumerate}
+
+\begin{lstlisting}[language=configToml, caption={Telegraf bridging configuration (telegraf.conf)}, label={lst:telegraf-conf}, basicstyle=\ttfamily\small, breaklines=true]
+[agent]
+  interval = "1s"
+  flush_interval = "1s"
+  precision = "1ms"
+  omit_hostname = true
+
+[[inputs.mqtt_consumer]]
+  servers = ["${MQTT_BROKER_URL}"]
+  topics = ["uagv/v2/+/+/state"]
+  client_id = "telegraf-vda5050"
+  qos = 1
+  persistent_session = true
+  data_format = "value"
+  data_type = "string"
+
+  [[inputs.mqtt_consumer.topic_parsing]]
+    topic = "uagv/v2/+/+/state"
+    tags = "_/_/source_manufacturer/source_serial_number/message_type"
+
+[[processors.template]]
+  order = 0
+  tag = "source_asset_key"
+  template = '{{ .Tag "source_manufacturer" }}:{{ .Tag "source_serial_number" }}'
+
+[[outputs.kafka]]
+  brokers = ["${KAFKA_BROKER}"]
+  topic = "vda5050-state"
+  routing_tag = "source_asset_key"
+  required_acks = -1
+  idempotent_writes = true
+  compression_codec = 4
+  startup_error_behavior = "retry"
+  data_format = "template"
+  template = '{{ .Field "value" }}'
+
+  [outputs.kafka.headers]
+    source_serial_number = '{{ index .Tags "source_serial_number" }}'
+    source_manufacturer = '{{ index .Tags "source_manufacturer" }}'
+    source_asset_key = '{{ index .Tags "source_asset_key" }}'
+    message_type = '{{ index .Tags "message_type" }}'
+    mqtt_topic = '{{ index .Tags "topic" }}'
+\end{lstlisting}
+
+\section{Event Stream Layer Implementation}
+\label{sec:event_stream_implementation}
+
+The event streaming layer was implemented using Redpanda, a Kafka-compatible
+event streaming platform that acts as the central event bus connecting the
+telemetry processing components. Three services are defined in the Docker
+Compose configuration: the Redpanda broker, Redpanda Console for stream
+monitoring and visualization, and a one-shot initialization service for
+creating the required topics.
+
+The Redpanda broker is configured to expose two Kafka-compatible endpoints.
+The internal endpoint (\texttt{redpanda:9092}) enables communication between
+services within the Docker network, while the external endpoint
+(\texttt{localhost:19092}) allows access from the host machine. The
+administrative API is exposed on port \texttt{9644}, and persistent storage
+is configured through a Docker volume to preserve broker data across
+container restarts.
+
+To improve startup reliability, a health check is configured using
+\texttt{rpk cluster health}. The Redpanda Console service waits until the
+broker is healthy before starting, while the initialization service uses
+the same dependency condition to ensure that topic creation is attempted
+only after the broker is operational. The initialization service creates
+the \texttt{vda5050-state}, \texttt{vda5050-state-deduplicated}, \texttt{fleet-features}, and \texttt{ai-anomalies} topics with four partitions and exits after
+completing the operation. The \texttt{--if-not-exists} option prevents
+errors when the topic has already been created.
+
+A four-partition configuration was selected to provide parallelism for
+the expected telemetry workload. Depending on message size, hardware
+resources, replication settings, and processing overhead, a partition
+may support throughput in the order of thousands or tens of thousands
+of messages per second. Therefore, four partitions provide a reasonable
+initial configuration for the simulated fleet, although the effective
+capacity must be validated through performance testing. The broker runs
+in \texttt{dev-container} mode with one CPU core assigned through
+\texttt{--smp 1}, reflecting the resource constraints of the local
+development environment.
+
+\begin{lstlisting}[language=yaml, caption={Redpanda Docker Compose}, label={lst:redpanda-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.12
+    hostname: redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+    ports:
+      - 19092:19092
+      - 19644:9644
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks:
+      - redpanda-net
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v3.8.0
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    ports:
+      - 9080:8080
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - redpanda-net
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.12
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        rpk topic create vda5050-state --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create vda5050-state-deduplicated --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create fleet-features --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create ai-anomalies --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - redpanda-net
+
+volumes:
+  redpanda-data:
+\end{lstlisting}
+
+\section{Stream Processing Layer: Apache Spark Implementation}
+\label{sec:spark-implementation}
+
+The stream processing tier is implemented using \textbf{Apache Spark} (version 3.5.0) via its \textbf{Structured Streaming} framework. It is deployed as a dedicated containerized service (\texttt{spark-processing}) within the Docker Compose orchestration stack.
+
+To interface seamlessly with both the event streaming backbone and the object storage tier, the Spark container is attached to two isolated bridge networks: \texttt{redpanda-net} (for subscribing to raw telemetry and republishing processed streams) and \texttt{lakehouse-net}.
+
+The container initialization is governed by health-check and completion dependencies:
+\begin{itemize}
+    \item It waits for the \texttt{redpanda} broker to report a healthy cluster status.
+    \item It awaits the successful execution of \texttt{redpanda-init} to ensure that all required topics (including \texttt{vda5050-state} and \texttt{vda5050-state-deduplicated}) have been provisioned before job submission.
+    \item It requires \texttt{minio} to be started and the \texttt{createbuckets} utility container to successfully complete bucket initialization (\texttt{lakehouse}).
+\end{itemize}
+
+Streaming execution is launched using \texttt{spark-submit} in local client mode (\texttt{local[*]}), dynamically resolving the required Kafka integration library (\texttt{spark-sql-kafka-0-10}) and Amazon S3A connector (\texttt{hadoop-aws}).
+
+\begin{lstlisting}[language=yaml, caption={Apache Spark Docker Compose configuration}, label={lst:spark-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  spark-processing:
+    image: apache/spark:3.5.0
+    container_name: spark-processing
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    networks:
+      - redpanda-net
+      - lakehouse-net
+    volumes:
+      - ./jobs:/opt/spark/jobs
+    command: >
+      /opt/spark/bin/spark-submit
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4
+      --master local[*]
+      /opt/spark/jobs/bronze_ingestion.py
+\end{lstlisting}
+
+\subsection{Bronze Ingestion Job}
+\label{subsec:bronze-ingestion-job}
+
+The Bronze ingestion job (\texttt{bronze\_ingestion.py}) implements the foundational data curation stage of the Medallion architecture. Operating as a continuous PySpark Structured Streaming application, it consumes the raw, heterogeneous telemetry stream from the central message bus and enforces state-change deduplication before persisting records into object storage.
+
+\paragraph{Ingestion and Storage Configuration:}
+Spark initializes an S3A filesystem client configured to interact with the containerized MinIO object store using path-style access (\texttt{http://minio:9000}). Inbound telemetry is ingested by subscribing to the raw Kafka topic \texttt{vda5050-state} starting from the earliest available offset.
+
+\paragraph{State-Change Deduplication Algorithm:}
+In automated mobile robotics, high reporting frequencies (such as periodic 1~Hz heartbeats) produce significant data redundancy during periods of static idle operation or steady-state cruising. Storing every consecutive duplicate record introduces unnecessary storage overhead and dilutes analytical density. To resolve this, the Bronze job implements a content-aware, state-change filtering algorithm executed within micro-batches (\texttt{foreachBatch}):
+
+\begin{enumerate}
+    \item \textbf{Asset Key Resolution:} Each event's routing key is resolved by coalescing the Kafka record key with the payload's internal \texttt{serialNumber} attribute.
+    \item \textbf{Cryptographic State Hashing:} Volatile operational metadata that increments without reflecting genuine physical state modifications---specifically \texttt{headerId} and \texttt{timestamp}---are scrubbed from the JSON payload using regular expression replacements. A cryptographic SHA-256 hash (\texttt{sha2(cleaned\_json, 256)}) is then computed over the remaining invariant attributes (position, driving mode, motor telemetry, battery state).
+    \item \textbf{Intra-Batch State Transition Tracking:} Using Spark SQL window functions partitioned by \texttt{asset\_key} and ordered chronologically (\texttt{lag("state\_hash")}), each record is compared against its immediate predecessor within the micro-batch.
+    \item \textbf{Inter-Batch State Persistence:} To preserve continuity across micro-batch execution boundaries, an in-memory dictionary (\texttt{last\_seen\_state}) tracks the most recent valid hash per asset. The first event of an asset in a given batch is evaluated against this cross-batch state anchor.
+    \item \textbf{Redundancy Filtering:} Only records exhibiting a state hash distinct from the preceding state are retained. Redundant heartbeats are pruned.
+\end{enumerate}
+
+\paragraph{Dual-Sink Output Pattern:}
+Events passing the deduplication filter are committed concurrently across two distinct sinks:
+\begin{itemize}
+    \item \textbf{Analytical Persistence Sink (MinIO):} Cleaned Bronze records are appended to MinIO object storage in columnar Parquet format under \path{s3a://lakehouse/vda5050_raw_state}.
+    \item \textbf{Event Streaming Sink (Redpanda):} The deduplicated stream is republished to the intermediate Kafka topic \texttt{vda5050-state-deduplicated}, providing downstream processing stages with noise-free, high-density telemetry.
+\end{itemize}
+
+Streaming fault tolerance is guaranteed through write-ahead checkpointing persisted directly to \path{s3a://lakehouse/checkpoints/vda5050_raw_state}.
+
+Listing~\ref{lst:bronze-ingestion-code} outlines the core deduplication and dual-sink commit logic implemented in PySpark.
+
+\begin{lstlisting}[language=python, caption={PySpark Bronze state-change deduplication and dual-sink commit logic}, label={lst:bronze-ingestion-code}, basicstyle=\ttfamily\small, breaklines=true]
+def process_batch(batch_df, batch_id):
+    if not batch_df.take(1):
+        return
+
+    # Derive asset key and scrub volatile metadata
+    df_with_key = batch_df.withColumn(
+        "asset_key", coalesce(col("raw_key"), get_json_object(col("value"), "$.serialNumber"))
+    )
+    cleaned_json = regexp_replace(
+        regexp_replace(col("value"), r'"headerId"\s*:\s*[0-9]+\s*,?\s*', ''),
+        r'"timestamp"\s*:\s*"[^"]*"\s*,?\s*', ''
+    )
+    hashed_df = df_with_key.withColumn("state_hash", sha2(cleaned_json, 256))
+
+    # Detect state changes using intra-batch and cross-batch state history
+    w = Window.partitionBy("asset_key").orderBy("timestamp")
+    lagged_df = hashed_df.withColumn("prev_hash_in_batch", lag("state_hash").over(w))
+
+    dedup_batch = effective_df.filter(
+        col("prev_hash").isNull() | (col("state_hash") != col("prev_hash"))
+    )
+
+    if not dedup_batch.take(1):
+        return
+
+    dedup_batch.persist()
+    try:
+        # Dual Sink 1: Columnar Parquet persistence in MinIO S3
+        dedup_batch.selectExpr("asset_key AS key", "value", "timestamp") \
+            .write.mode("append").parquet("s3a://lakehouse/vda5050_raw_state")
+
+        # Dual Sink 2: Intermediate Redpanda topic for downstream compute
+        dedup_batch.selectExpr("CAST(asset_key AS STRING) AS key", "CAST(value AS STRING) AS value") \
+            .write.format("kafka").option("kafka.bootstrap.servers", "redpanda:9092") \
+            .option("topic", "vda5050-state-deduplicated").save()
+    finally:
+        dedup_batch.unpersist()
+\end{lstlisting}
+
+\subsection{Silver Feature Engineering Job}
+\label{subsec:silver-feature-engineering-job}
+
+\textit{(TO DO)}
+
+\subsection{Gold Inference Job}
+\label{subsec:gold-inference-job}
+
+\textit{(TO DO)}
+
+\section{Data Lakehouse Layer Implementation}
+\label{sec:data-lakehouse-implementation}
+
+\textit{(TO BE COMPLETED: Overview of the Data Lakehouse implementation, storage topology, and integration between object storage and modern table formats).}
+
+\subsection{S3-Compatible Object Storage: MinIO}
+\label{subsec:minio-s3-implementation}
+
+The object storage tier was implemented using \textbf{MinIO}, an open-source, high-performance distributed object storage server fully compatible with the Amazon S3 API. In this architecture, MinIO serves as the primary persistence layer for storing raw Bronze Parquet files and managing streaming checkpoints for Apache Spark.
+
+Two services are defined within the Docker Compose deployment:
+\begin{itemize}
+    \item \textbf{MinIO Server (\texttt{minio}):} Runs the core object storage engine, persisting data in a dedicated Docker volume (\texttt{minio-data}). The S3 API operates on container port \texttt{9000}, which is mapped to host port \texttt{19000} to prevent host port collisions with QuestDB. The interactive web console is exposed on host port \texttt{9001}. A container health check probes \texttt{/minio/health/live} to guarantee service availability before downstream consumers initiate requests.
+    \item \textbf{Bucket Provisioning (\texttt{createbuckets}):} A lightweight initialization container using the MinIO Client (\texttt{minio/mc}) CLI. It waits for the MinIO server to report a healthy status, configures a local connection alias, and automatically provisions the target bucket (\texttt{lakehouse}) using \texttt{mc mb --ignore-existing}. Once bucket creation succeeds, the container terminates cleanly.
+\end{itemize}
+
+Both services are attached to the \texttt{lakehouse-net} network, ensuring secure, isolated network communication with the Spark stream processing tier.
+
+\begin{lstlisting}[language=yaml, caption={MinIO Docker Compose configuration}, label={lst:minio-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123456
+    volumes:
+      - minio-data:/data
+    ports:
+      - "19000:9000"
+      - "9001:9001"
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 admin admin123456;
+      mc mb --ignore-existing local/lakehouse;
+      exit 0;
+      "
+    networks:
+      - lakehouse-net
+
+volumes:
+  minio-data:
+\end{lstlisting}
+
+\subsection{Table Format Implementation: Apache Iceberg}
+\label{subsec:iceberg-implementation}
+
+\textit{(TO BE COMPLETED: Apache Iceberg catalog configuration, table schema definition, and partitioning strategy across Bronze, Silver, and Gold tiers).}
+
+\section{QuestDB Implementation and Integration}
+\label{sec:questdb-implementation}
+
+As established in the architectural design (Chapter~\ref{chap:system_architecture}), the platform adopts a bifurcated persistence strategy that strictly separates the analytical lakehouse storage (MinIO and Apache Iceberg) from the operational time-series database. While the lakehouse is optimized for heavy, multi-tier batch analytics and offline model training, real-time observability requires a database capable of sub-second streaming ingestion and high-frequency SQL aggregations across sliding time windows. To fulfill this operational role, \textbf{QuestDB} (version 9.4.3) was selected and integrated into the containerized platform.
+
+The QuestDB subsystem interfaces directly with the central event streaming layer through a dedicated, containerized \textbf{Apache Kafka Connect} cluster. This design establishes an automated ingestion pipeline that streams live VDA~5050 robot telemetry from Redpanda into QuestDB without requiring intermediate message-polling services or bespoke application logic.
+
+\subsection{Database Deployment and Schema Architecture}
+\label{subsec:questdb-deployment-schema}
+
+The database engine is deployed as an isolated service (\texttt{questdb}) within a dedicated bridge network (\texttt{questdb-net}). Persistent telemetry is stored on a dedicated Docker volume (\texttt{questdb-data}), preserving all historical state messages across container restarts.
+
+QuestDB provides native multi-protocol support. In this deployment, three distinct interfaces are configured:
+\begin{itemize}
+    \item \textbf{HTTP REST API and Web Console (port 9000):} Used for system administration, automated schema provisioning, and diagnostic telemetry inspection.
+    \item \textbf{PostgreSQL Wire Protocol (port 8812):} QuestDB natively emulates the PostgreSQL wire protocol. To adhere to the principle of least privilege, a dedicated read-only user (\texttt{QDB\_PG\_READONLY\_USER: grafana}) is configured. This endpoint allows Grafana dashboards to query operational tables directly using standard SQL without exposing write permissions.
+    \item \textbf{InfluxDB Line Protocol (port 9009):} Maintained for low-overhead, high-throughput streaming metrics ingestion if required.
+\end{itemize}
+
+A container health check continuously probes the HTTP status endpoint (\texttt{http://localhost:9003/status}) to ensure the engine is fully initialized before downstream connectors attempt data transmission.
+
+To automate database table provisioning upon initial startup, a one-shot container (\texttt{questdb-init}) is defined using \texttt{curlimages/curl}. It executes after QuestDB reports a healthy state, submitting SQL DDL commands to QuestDB's \texttt{/exec} REST endpoint.
+
+\textit{(TO DO: TABLE IMPLEMENTATIONS)}
+
+\subsection{Kafka Connect Integration and Custom Single Message Transformations}
+\label{subsec:questdb-kafka-connect}
+
+To transfer telemetry seamlessly from the Redpanda broker into QuestDB, a specialized Kafka Connect service (\texttt{questdb-kafka-connect}) was implemented. Because QuestDB is an append-only relational time-series database that expects tabular scalar structures, directly ingesting complex, hierarchically nested VDA~5050 JSON payloads (containing nested objects and arrays) poses technical challenges.
+
+\textit{(TO DO: SINK CONNECTOR IMPLEMENTATION)}
+
+\subsection{Automated Lifecycle and Dependency Management}
+\label{subsec:questdb-lifecycle}
+
+To guarantee reliable system initialization, service orchestration is strictly ordered through Docker health checks and one-shot provisioning containers:
+\begin{enumerate}
+    \item The \texttt{questdb} service initializes its engine and validates readiness on port 9003.
+    \item The \texttt{questdb-init} service triggers the SQL DDL creation of the \texttt{vda5050\_state} table.
+    \item The \texttt{questdb-kafka-connect} service initializes only after the Redpanda broker is healthy, all required Kafka topics are created (\texttt{redpanda-init}), and QuestDB tables exist (\texttt{questdb-init}).
+    \item Finally, a dedicated initialization container (\texttt{questdb-kafka-connect-init}) executes an automated shell script that submits the connector configuration via the Kafka Connect REST API (\texttt{PUT /connectors/<name>/config}). The script actively polls the connector status endpoint until the task achieves the \texttt{RUNNING} state, ensuring that the pipeline is completely operational before simulated AGVs begin streaming messages.
+\end{enumerate}
+
+This architecture guarantees end-to-end automated orchestration, preventing race conditions during platform startup while maintaining strict network isolation between operational storage, event streaming, and analytical tiers.
+
+\textit{(TO DO: DOCKER COMPOSE)}
+
+\section{Grafana Implementation}
+\label{sec:grafana_implementation}
+
+\textit{(TO DO)}
+
+\section{Source System Simulation} 
+\label{sec:source_system_simulation} 
+The source system layer is currently implemented using a modified version of the \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050}. The simulator executes inside a dedicated container and connects to the MQTT broker through the shared \texttt{mqtt-net} network. 
+
+The \texttt{depends\_on} directive combined with Docker health checks guarantees that the simulator starts only after the broker has become available. 
+
+\begin{lstlisting}[language=yaml, caption={VDA5050 Simulator Docker Compose}, label={lst:vda5050-simulator-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
+services:
+  simulator:
+    image: vda5050-vehicle-simulator:latest
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - mqtt-net
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+\end{lstlisting}
+
+The simulator configuration is loaded from a dedicated configuration file that defines fleet parameters, MQTT communication settings, and telemetry generation properties. During execution, each simulated AGV periodically publishes VDA 5050-compliant state messages to the MQTT broker. 
+
+To support the anomaly detection use case, the original simulator was extended with additional telemetry channels representing motor, battery, and drivetrain behavior. These extensions enable the generation of realistic training data for machine learning workloads while preserving compatibility with the VDA 5050 communication standard.
+
+\section{Physical Modeling Framework}
+\label{sec:physical_modeling}
+
+To provide physically consistent telemetry for anomaly recognition, the kinematic simulation of the automated guided vehicle (AGV) is extended with an electromechanical powertrain model. The objective is not to replicate every microscopic effect of a physical robot, but to capture the dominant coupling between trajectory demands, mechanical loads, electrical responses, and thermal dissipation.
+
+\subsection{Motor and Drivetrain Dynamics}
+
+The traction drive is modeled as an equivalent permanent-magnet DC (PMDC) machine coupled to a reduction gearbox ($i_g$) and driven wheel ($r_w$).
+
+The electrical armature circuit is governed by:
+\begin{equation}
+    V_m(t) = R_a(T_m) I_m(t) + L_a \frac{dI_m(t)}{dt} + K_e \omega_m(t)
+    \label{eq:armature_base}
+\end{equation}
+where $V_m$ is the armature terminal voltage, $I_m$ the armature current, $R_a(T_m)$ the winding resistance, $K_e$ the back-EMF constant, and $\omega_m$ the rotor speed.
+
+\paragraph{Quasi-static approximation ($L_a \approx 0$):}
+Because the electrical time constant ($\tau_e = L_a / R_a \approx 40\,\mathrm{ms}$) is much shorter than the mechanical time constant ($\tau_m \approx 1\text{--}3\,\mathrm{s}$) and the state reporting rate, the inductive transient $L_a \frac{dI_m}{dt}$ is neglected. This yields the quasi-static relationship:
+\begin{equation}
+    V_m(t) = R_a(T_m) I_m(t) + K_e \omega_m(t)
+\end{equation}
+
+Electromagnetic torque follows:
+\begin{equation}
+    \tau_m(t) = K_t I_m(t)
+    \label{eq:electromagnetic_torque}
+\end{equation}
+where $K_t$ is the torque constant. The mechanical torque balance at the motor shaft is:
+\begin{equation}
+    J_m \frac{d\omega_m(t)}{dt} + B_m \omega_m(t) = \tau_m(t) - \frac{\tau_L(t)}{\eta_g i_g} - \tau_{\mathrm{friction}}
+    \label{eq:torque_balance}
+\end{equation}
+where $J_m$ is rotor inertia, $B_m$ viscous friction, $\eta_g$ gearbox efficiency, and $\tau_{\mathrm{friction}}$ unmodeled or degraded drivetrain friction. The wheel load torque $\tau_L(t)$ aggregates rolling resistance, road grade, vehicle acceleration, and drawbar forces:
+\begin{equation}
+    \tau_L(t) = r_w \left[ C_{rr} m_{\mathrm{total}} g \cos\theta + m_{\mathrm{total}} a(t) + m_{\mathrm{total}} g \sin\theta + F_{\mathrm{drawbar}} \right]
+\end{equation}
+where $m_{\mathrm{total}} = m_{\mathrm{chassis}} + m_{\mathrm{payload}}$ is the total vehicle mass.
+
+\subsection{Kinematics and Wheel Slip}
+
+The relationship between rotor speed and linear ground speed $v(t)$ accounts for transmission geometry and wheel slip:
+\begin{equation}
+    v(t) = \frac{\omega_m(t)}{i_g} r_w (1 - s(t))
+\end{equation}
+where $s(t) \in [0, 1)$ represents the slip ratio. Under nominal traction, $s(t) \approx 0$. When wheel slippage occurs, $s(t) \to 1$, which decouples wheel speed from chassis velocity ($v_{\mathrm{wheel}} \gg v_{\mathrm{ground}}$) while collapsing the ground reaction torque ($\tau_L \to 0$).
+
+\subsection{Thermal Dissipation Models}
+
+Winding resistance increases with copper temperature:
+\begin{equation}
+    R_a(T_m) = R_{a0} \left[ 1 + \alpha (T_m(t) - T_0) \right]
+\end{equation}
+where $R_{a0}$ is the baseline resistance at temperature $T_0$, and $\alpha$ is the copper temperature coefficient.
+
+The thermal dynamics of the motor are modeled as a lumped first-order node accounting for Joule heating, core iron losses (Steinmetz formulation), and convective heat transfer to the ambient environment ($T_{\mathrm{amb}}$):
+\begin{equation}
+    C_{\mathrm{th}} \frac{dT_m(t)}{dt} = I_m(t)^2 R_a(T_m) + C_{fe} \omega_m(t)^{1.6} B_{\max}^2 - \frac{T_m(t) - T_{\mathrm{amb}}}{R_{\mathrm{th}}}
+\end{equation}
+Similarly, the battery pack temperature $T_{\mathrm{bat}}(t)$ accounts for internal resistive heating:
+\begin{equation}
+    C_{\mathrm{th,bat}} \frac{dT_{\mathrm{bat}}(t)}{dt} = I_{\mathrm{bat}}(t)^2 R_{\mathrm{int}} - \frac{T_{\mathrm{bat}}(t) - T_{\mathrm{amb}}}{R_{\mathrm{th,bat}}}
+\end{equation}
+
+\subsection{Battery Equivalent Circuit Model (ECM)}
+
+Battery terminal voltage $V_{\mathrm{bat}}(t)$ is represented by an ohmic equivalent circuit:
+\begin{equation}
+    V_{\mathrm{bat}}(t) = V_{\mathrm{ocv}}(SOC) - I_{\mathrm{bat}}(t) R_{\mathrm{int}}(SOC, T_{\mathrm{bat}})
+    \label{eq:battery_ecm}
+\end{equation}
+where open-circuit voltage $V_{\mathrm{ocv}}(SOC)$ scales with state of charge ($SOC$), and internal resistance $R_{\mathrm{int}}$ varies with $SOC$, temperature, and battery degradation. State of charge evolves via Coulomb counting based on total drawn power and charging currents:
+\begin{equation}
+    \frac{dSOC(t)}{dt} = -\frac{I_{\mathrm{bat}}(t)}{Q_{\mathrm{nom}}} \cdot 100
+\end{equation}
+
+\paragraph{Omission of the polarization branch ($V_{\mathrm{pol}}$):}
+A complete 1-RC ECM introduces a capacitive polarization branch ($\frac{dV_{\mathrm{pol}}}{dt} = -\frac{V_{\mathrm{pol}}}{R_p C_p} + \frac{I_{\mathrm{bat}}}{C_p}$). This branch is deliberately omitted, and its transfer resistance $R_p$ is folded into $R_{\mathrm{int}}$ ($0.035 + 0.015 = 0.050\,\Omega$). 
+\emph{Justification:} Detailed $R_p/C_p$ parameters cannot be calibrated without dedicated electrochemical pulse tests, and the polarization branch accounts for less than 20\% of total voltage sag. In a purely ohmic model, the load-step response is directly proportional to $I_{\mathrm{bat}} \cdot R_{\mathrm{int}}$, producing a clean, unambiguous signature for battery state-of-health (SOH) degradation without masking other anomalies.
+
+\subsection{Physical Fault Injection and Transducer Emulation}
+
+Rather than injecting synthetic noise into high-level features, faults perturb the physical equations directly:
+\begin{itemize}
+    \item \textbf{Mechanical Stall:} Imposes $\omega_m = 0$, collapsing back-EMF ($E_b = 0$) and causing the current to surge to the drive limit, accompanied by rapid thermal rise and battery voltage sag.
+    \item \textbf{Wheel Slippage:} Forces $s(t) \to 1$, reducing load torque ($\tau_L \to 0$) while motor speed remains high.
+    \item \textbf{Gearbox Degradation:} Injects an additive friction torque $\tau_{\mathrm{friction}}$, increasing steady-state current and operating temperature.
+    \item \textbf{Stator Fault:} Injects harmonic current ripple and multiplies copper Joule heating.
+    \item \textbf{Battery SOH Degradation:} Multiplies $R_{\mathrm{int}}$, producing pronounced voltage drops during acceleration steps.
+\end{itemize}
+
+Finally, physical states are conditioned through transducer models (Gaussian noise, ADC quantization, and thermal/gain drift) to generate realistic diagnostic telemetry for anomaly detection algorithms.
+
+\section{Synthetic Dataset Generation}
+\label{sec:synthetic_dataset_generation}
+
+The original \texttt{vda5050\_vehicle\_simulator} provides operational AGV state information compliant with the VDA 5050 standard. However, these messages do not contain the detailed electromechanical telemetry required to train anomaly detection models. To address this limitation, the simulator was extended with a physical telemetry generation layer capable of computing motor, battery, thermal, and drivetrain variables. The objective was to generate realistic telemetry streams preserving the physical relationships between electrical, mechanical, and thermal quantities typically observed in industrial AGV systems.
+
+The generated telemetry is embedded into the VDA 5050 \texttt{information} field and published together with the standard AGV state message. Listing~\ref{lst:vda5050-telemetry} illustrates an example of the generated telemetry payload. The additional telemetry variables incorporated into the simulator are:
+
+\begin{itemize}
+    \item Motor current ($I_m$)
+    \item Motor voltage ($V_m$)
+    \item Motor temperature ($T_m$)
+    \item Motor angular velocity ($\omega_m$)
+    \item Motor torque ($\tau_m$)
+    \item Back-electromotive force ($E_b$)
+    \item Motor power
+    \item Battery current ($I_{bat}$)
+    \item Battery voltage ($V_{bat}$)
+    \item State of Charge (SOC)
+    \item State of Health (SOH)
+    \item Battery temperature ($T_{bat}$)
+    \item Wheel slip ratio
+\end{itemize}
+
+These variables were selected because they are commonly used in predictive maintenance, condition monitoring, and fault diagnosis applications for electrically driven industrial vehicles. 
+
+The extension of the original \texttt{vda5050\_vehicle\_simulator} required the implementation of additional electromechanical, thermal, and battery modelling capabilities based on the physical framework presented in Section~\ref{sec:physical_modeling}. Since the simulator adaptation itself was not the primary research objective of this work, modern AI-assisted software engineering techniques were employed to accelerate development. 
+
+Specifically, an on-premise local AI model provided by the enterprise, NOVA, was primarily utilized during the design and iterative implementation phases, complemented by Google Gemini 3.8 Flash for architectural specification, code validation, and prompt structuring. The models were provided with detailed requirements regarding the desired physical behaviour, software architecture, VDA 5050 compatibility constraints, and telemetry channels to be incorporated into the simulator. 
+
+The prompts were formulated as rigorous software specification documents detailing the required electromechanical, thermal, and battery equations, architectural constraints within the asynchronous Tokio runtime, Serde serialization structures, runtime fault scenarios triggered via VDA 5050 Instant Actions, and unit test requirements. 
+
+Crucially, the AI-generated code was not incorporated directly into the project without verification. Instead, all algorithmic proposals were systematically reviewed, manually adapted to fit the simulator codebase, validated against theoretical physics curves, and thoroughly tested before final integration. A comprehensive validation of the simulator's physical responses and fault injection behavior is presented in Chapter~\ref{chap:testing_evaluation}.
+
+\section{Machine Learning Pipeline Implementation}
+\label{sec:ml_pipeline_implementation}
+
+\textit{(TO DO)}

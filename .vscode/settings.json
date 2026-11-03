@@ -17,15 +17,15 @@
   ],
   "latex-workshop.latex.recipes": [
     {
-      "name": "Windows (build.ps1)",
-      "tools": ["build.ps1"]
+      "name": "Linux / macOS / WSL (build.sh)",
+      "tools": ["build.sh"]
     },
     {
-      "name": "WSL (build.sh)",
-      "tools": ["build.sh"]
+      "name": "Windows (build.ps1)",
+      "tools": ["build.ps1"]
     }
   ],
-  "latex-workshop.latex.recipe.default": "Windows (build.ps1)",
+  "latex-workshop.latex.recipe.default": "lastUsed",
   "latex-workshop.rootFile.rootFiles": ["main.tex", "./main.tex"],
   "latex-workshop.latex.autoBuild.run": "onSave",
   "latex-workshop.latex.autoBuild.interval": 1500,

@@ -36,12 +36,14 @@ This modular design provides several advantages. First, it promotes loose coupli
 
 To maximize interoperability and future extensibility, communication between architectural layers is performed through standardized interfaces and message formats. This design principle ensures that a component can be replaced without requiring major modifications in the remaining layers. For example, the simulated AGV fleet used during development could be replaced by a real fleet management system, while preserving the same MQTT and VDA 5050 communication contracts. As a result, the architecture remains independent of specific hardware vendors or software providers.
 
-\subsection{Continuous Integration and Version Control}
-
-The development process follows modern software engineering practices based on distributed version control and continuous integration principles. Git was adopted as the central version control system, enabling traceability of architectural decisions, source code modifications, configuration changes, and experimental results throughout the project lifecycle. In addition, the containerized nature of the platform facilitates the implementation of future Continuous Integration and Continuous Deployment (CI/CD) pipelines, allowing automatic validation, testing, and deployment of updated system components.
-
 \subsection{Event-Driven Architecture} An event-driven architecture was adopted as the communication paradigm for the entire platform. Rather than relying on direct point-to-point interactions between services, all components communicate through an intermediate event streaming layer. This approach significantly reduces coupling between producers and consumers, allowing individual services to evolve independently without affecting other parts of the system. Additionally, new services can be integrated into the platform with minimal effort by subscribing to the existing event streams. The event streaming layer acts as the system's central source of truth, providing a unified and consistent mechanism for distributing telemetry, operational events, and analytical results across the architecture. This design improves scalability, extensibility, and maintainability while facilitating the integration of future data processing and monitoring capabilities.
 
+\subsection{Separation of Training and Inference Pipelines}
+The machine learning subsystem was designed following a clear separation between training and inference workloads. Model training is performed offline using Python-based machine learning frameworks that consume historical data and engineered features stored in Apache Iceberg tables. This approach provides flexibility for feature engineering, experimentation, hyperparameter tuning, and model evaluation.
+
+In contrast, model inference is integrated directly into the Apache Spark streaming pipeline. Once a model has been trained and validated, it is exported and embedded into the stream processing layer, allowing predictions to be generated in real time as new AGV telemetry events are processed. This design avoids the latency associated with external prediction services and enables seamless integration with the event-driven architecture.
+
+The separation of training and inference responsibilities allows each workload to be optimized independently. Training processes prioritize model accuracy and experimentation capabilities, whereas inference processes prioritize low latency, scalability, and operational reliability. Furthermore, the architecture facilitates future model updates, since newly trained models can be deployed to the streaming environment without requiring modifications to the surrounding data processing infrastructure.
 \section{Source Systems Layer}
 In designing the data ingestion pipeline, a preliminary study was conducted to determine the optimal source of truth for the system. At first, the possibility of utilizing a physical Autonomous Mobile Robot (AMR) in real time was evaluated. However, this approach was discarded for the training phase due to two primary constraints: first, only a single real unit was available, which is insufficient to represent a fleet-scale source system; second, the physical hardware lacked the specific internal telemetry sensors required for comprehensive anomaly detection analytics.
 
@@ -105,9 +107,9 @@ Several MQTT broker implementations were evaluated during the architectural desi
 Furthermore, the publish/subscribe communication model facilitates horizontal scalability and simplifies the integration of future services. New consumers can subscribe to existing telemetry streams without requiring modifications to the source systems, making the architecture more extensible and maintainable.
 
 \section{Event Streaming Bus Layer}
-\subsection{Kafka provider selection}
 To establish an enterprise-grade backbone for telemetry ingestion, storage, and analytics, the architecture incorporates a distributed event streaming platform. While the MQTT layer excels at lightweight device-to-broker messaging, an append-only distributed log is essential to serve as the immutable single source of truth, handle high-throughput event replay, and decouple analytical consumers from edge producers.
 
+\subsection{Kafka provider selection}
 During the architectural design phase, distributed streaming technologies were evaluated. Although Apache Kafka represents the industry benchmark, \textbf{Redpanda} was selected as the central event broker. Redpanda provides complete protocol-level compatibility with the Apache Kafka API, allowing ecosystem tools—such as Apache Spark Structured Streaming and Kafka Connect—to operate seamlessly without modification or proprietary client adapters.
 
 The decision to adopt Redpanda instead of traditional Apache Kafka is justified by several architectural advantages:
@@ -118,30 +120,29 @@ The decision to adopt Redpanda instead of traditional Apache Kafka is justified 
     \item \textbf{Integrated Developer Tooling:} The platform bundles the \texttt{rpk} management utility and the Redpanda Console user interface out of the box, streamlining topic inspection, consumer-group monitoring, and partition offset observability without requiring external monitoring containers.
 \end{itemize}
 
-By deploying Redpanda with four partitions per telemetry topic (\texttt{vda5050-state}) keyed by manufacturer and serial identifier (\texttt{manufacturer:serial}), the streaming tier guarantees strict per-asset chronological ordering while simultaneously unlocking parallel multi-threaded consumption for downstream real-time storage (QuestDB) and scalable distributed analytics (Apache Spark).
-\subsection{Kafka Topic Design}
-
-The creation of topics in Redpanda follows specific design considerations
-to handle high-frequency telemetry streams efficiently. A standardized
-configuration of \textbf{four partitions per topic} was adopted to balance
-processing parallelism and resource overhead. Table~\ref{tab:kafka-topic-design}
-summarizes the topic naming conventions, data content, and information flow
-within the proposed architecture.
+By leveraging Redpanda as the event streaming backbone, the platform ensures durable event persistence, horizontal scalability, ordered event processing, and seamless integration with the wider Kafka ecosystem. These characteristics make it an appropriate foundation for the real-time data ingestion and analytics requirements of the proposed architecture.
+\subsection{Kafka Topic Design} The creation of topics in Redpanda follows specific design considerations to efficiently organize telemetry streams, operational events, and analytical data flows. Topics were designed to provide clear separation of concerns, facilitate independent consumer processing, and support the event-driven communication model adopted throughout the platform. Table~\ref{tab:kafka-topic-design} summarizes the topic naming conventions, data content, and information flow within the proposed architecture.
 
 \begin{table}[htbp]
 \centering
+\small
 \caption{Kafka topic design and data flow.}
 \label{tab:kafka-topic-design}
-\begin{tabular}{@{}p{2.8cm}p{3.0cm}p{3.8cm}p{2.4cm}p{2.5cm}@{}}
+\begin{tabularx}{\linewidth}{@{}
+  >{\ttfamily\raggedright\arraybackslash}p{3.0cm}
+  >{\raggedright\arraybackslash}X
+  >{\raggedright\arraybackslash}X
+  >{\raggedright\arraybackslash}p{2.2cm}
+  >{\raggedright\arraybackslash}p{2.4cm}@{}}
 \toprule
-\textbf{Topic name} &
+\textrm{\textbf{Topic name}} &
 \textbf{Name selection} &
 \textbf{Content} &
 \textbf{Produced by} &
 \textbf{Consumed by} \\
 \midrule
 
-\texttt{vda5050-state} &
+vda5050-state &
 Reflects the standardized VDA 5050 state messages generated by automated guided vehicles (AGVs) \cite{vda5050standard}. &
 Raw telemetry and operational state messages contained in the VDA 5050 payload. &
 MQTT broker, bridged through Telegraf. &
@@ -149,7 +150,7 @@ Apache Spark Structured Streaming. \\
 
 \midrule
 
-\texttt{vda5050-state-deduplicated} &
+vda5050-state-\allowbreak deduplicated &
 Identifies cleaned state messages, distinguishing state transitions from redundant heartbeat updates. &
 Deduplicated VDA 5050 state records preserving genuine physical and operational changes. &
 Apache Spark Structured Streaming. &
@@ -157,7 +158,7 @@ Apache Spark Structured Streaming. \\
 
 \midrule
 
-\texttt{fleet-features} &
+fleet-features &
 Represents fleet-level operational features extracted and enriched from raw vehicle telemetry. &
 Processed telemetry, including derived kinematic and electrical features. &
 Apache Spark Structured Streaming. &
@@ -165,18 +166,18 @@ Apache Spark Structured Streaming and QuestDB via Kafka Connect. \\
 
 \midrule
 
-\texttt{ai-anomalies} &
+ai-anomalies &
 Identifies the outputs of the artificial intelligence module, distinguishing anomaly results from raw telemetry and derived features. &
 Inference outputs, including anomaly scores, reconstruction errors, and diagnostic information. &
 Apache Spark Structured Streaming. &
 QuestDB via Kafka Connect. \\
 
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \section{Streaming Integration and Inter-Service Connectivity}
-A critical requirement of the event-driven architecture is ensuring clean separation of concerns across the ingestion, streaming, storage, and processing tiers. Rather than tightly coupling producers and consumers to the central streaming bus, the integration topology relies on standardized connectors and specialized bridges. This approach isolates protocol adaptations to the respective system boundaries, preserving the raw VDA~5050 telemetry format within the central event log.
+A critical requirement of the event-driven architecture is ensuring clean separation of concerns across the ingestion, streaming, storage, and processing tiers. Rather than tightly coupling producers and consumers to the central streaming bus, the integration topology relies on standardized connectors and specialized bridges. This approach isolates protocol adaptations to the respective system boundaries, preserving the raw VDA~5050 telemetry format within the central event log, more details in the following subsections.
 
 The end-to-end data pipeline and inter-service connectivity model are illustrated in Figure~\ref{fig:streaming-integration-architecture}.
 
@@ -192,9 +193,7 @@ The rationale and implementation details for each integration interface are summ
 \subsection{MQTT to Event Streaming Ingestion Layer}
 An architectural decision was required to establish the data bridge between the edge messaging layer (Eclipse Mosquitto) and the central event streaming bus (Redpanda), ensuring that vehicle telemetry producers remain decoupled from Kafka-specific protocols.
 
-During the design phase, deploying a dedicated \textbf{Apache Kafka Connect MQTT Source connector} was evaluated to maintain a unified Kafka Connect framework across all integration points. However, this option was discarded due to the substantial resource overhead associated with hosting a separate Java Virtual Machine (JVM) runtime for simple protocol translation, which was deemed disproportionate for the edge ingestion stage.
-
-Consequently, it was decided to adopt \textbf{Telegraf} as a lightweight, dedicated bridging agent. Written in Go, Telegraf provides native MQTT client and Kafka producer capabilities with a minimal memory and compute footprint, making it significantly more resource-efficient than a JVM-based connector. This decision achieves the required protocol bridging while conserving host resources and preserving the original, unmodified telemetry payload as it enters the event bus.
+During the design phase, deploying a dedicated Apache Kafka Connect MQTT Source connector was evaluated. However, the MQTT ingestion boundary only requires protocol adaptation between MQTT and Kafka-compatible event streams, without the need for advanced connector lifecycle management, schema evolution, or stream transformations. Consequently, introducing a full Kafka Connect framework at this stage was considered architecturally unnecessary. Instead, Telegraf was selected as a dedicated telemetry ingestion agent because it provides native MQTT consumer and Kafka producer capabilities, enabling direct protocol bridging while preserving the original telemetry payloads. This approach minimizes architectural complexity, reduces the number of operational dependencies, and keeps the ingestion boundary focused exclusively on message transport responsibilities.
 
 \subsection{Streaming to Time-Series Persistence: Decoupled Kafka Connect for QuestDB}
 For real-time operational monitoring and visualization in Grafana, events must be streamed continuously into \textbf{QuestDB}. Instead of relying on bespoke consumers or embedding message-bus client logic into the storage layer, the industry-standard \textbf{Apache Kafka Connect} framework was adopted in sink mode (\texttt{io.questdb.kafka.QuestDBSinkConnector}).
@@ -215,7 +214,7 @@ Because Apache Spark incorporates first-class Kafka protocol consumer capabiliti
 
 In defining the computational backbone for telemetry transformation, analytical feature engineering, and scalable inference, an architectural decision was made regarding the stream processing engine. \textbf{Apache Spark}, utilizing its \textbf{Structured Streaming} framework, was selected as the central engine for this layer.
 
-In accordance with the scope of this chapter, this section outlines the architectural design decisions, component responsibilities, and data contracts that govern the stream processing tier, whereas concrete job code, container configurations, and execution scripts are addressed in the implementation phase (Chapter~\ref{chap:system_implementation}).
+In accordance with the scope of this chapter, this section outlines the architectural design decisions, component responsibilities, and data contracts that govern the stream processing tier, whereas the implementation is addressed in (Chapter~\ref{chap:system_implementation}).
 
 While distributed event logs like Redpanda provide durable message buffering, they lack high-level compute primitives for complex multi-stage data processing and distributed machine learning inference. Apache Spark was selected based on the following architectural design principles:
 \begin{itemize}
@@ -251,3 +250,34 @@ Figure~\ref{fig:spark-streaming-pipeline} illustrates the end-to-end data flow a
   \caption{Data pipeline of the multi-stage Spark Structured Streaming architecture, showing dual-sink persistence to Redpanda topics and S3 Iceberg tables.}
   \label{fig:spark-streaming-pipeline}
 \end{figure}
+
+\section{Data Lakehouse Layer: Storage Architecture}
+\label{sec:data-lakehouse-layer}
+
+To establish the analytical persistence foundation of the platform, the architecture incorporates the \textbf{Data Lakehouse} paradigm. While the event streaming bus (Redpanda) provides transient message buffering and the time-series engine (QuestDB) serves real-time dashboards, an immutable, cost-effective storage tier is required to persist the multi-tier Medallion datasets (Bronze, Silver, and Gold), store streaming execution checkpoints, and serve historical telemetry for offline machine learning model training.
+
+\subsection{Object Storage Provider Selection: MinIO}
+\label{subsec:minio-provider-selection}
+
+In modern data architectures, decoupling compute from storage is a fundamental design principle. Rather than deploying traditional distributed file systems (such as Apache HDFS) that introduce heavy operational overhead and tight coupling between compute nodes and physical disks, the architecture adopts \textbf{Object Storage} as the core persistence medium.
+
+During the architectural evaluation of object storage engines for on-premise, edge, and containerized deployment, \textbf{MinIO} was selected based on the following architectural criteria:
+
+\begin{itemize}
+    \item \textbf{Industry-Standard S3 API Compatibility:} MinIO provides complete protocol-level compatibility with the Amazon S3 REST API. This native compatibility allows upstream compute engines—specifically Apache Spark via its \texttt{hadoop-aws} S3A connector—and modern table management engines (Apache Iceberg) to interface with the storage tier using standard S3 client libraries without requiring proprietary adapters.
+    \item \textbf{Hybrid and Edge Deployment Portability:} In industrial cyber-physical environments, telemetry architectures frequently run on local edge infrastructure or on-premise factory servers before synchronizing with corporate data centers. MinIO enables a cloud-native S3 storage layer directly within containerized on-premise environments, ensuring that analytical pipelines can be migrated seamlessly to public cloud object stores (such as AWS S3 or Google Cloud Storage) simply by updating connection endpoints, without modifying data access logic.
+    \item \textbf{High-Throughput Columnar and Micro-Batch Workloads:} Written in Go, MinIO delivers lightweight resource consumption and high sequential read/write throughput. These characteristics are critical for handling the concurrent demands of Apache Spark's streaming checkpoints and continuous Parquet file ingestion.
+    \item \textbf{Strong Consistency for Lakehouse Table Formats:} Modern lakehouse table formats, such as Apache Iceberg, rely on atomic commit guarantees and strong read-after-write consistency to manage metadata snapshots and prevent race conditions during concurrent write operations. MinIO provides immediate consistency for all object operations out of the box, fulfilling this foundational requirement.
+\end{itemize}
+
+\subsection{Bifurcated Storage Architecture: Operational vs. Analytical Persistence}
+\label{subsec:bifurcated-storage}
+
+A core architectural decision of the proposed platform is the explicit decoupling between the \textbf{operational time-series store} (QuestDB) and the \textbf{analytical object store} (MinIO):
+
+\begin{itemize}
+    \item \textbf{Operational Path (QuestDB):} Optimized for low-latency ingest and high-frequency SQL aggregation across rolling time windows, dedicated to live operator visualization in Grafana.
+    \item \textbf{Analytical Path (MinIO / Lakehouse):} Optimized for massive, append-only historical telemetry persistence in columnar Parquet format, multi-tier Medallion curation, and high-throughput batch scanning required for offline machine learning model training.
+\end{itemize}
+
+This bifurcated storage design isolates analytical queries and heavy machine learning workloads from live operational monitoring, ensuring that intensive model training scans do not degrade dashboard rendering performance or message ingestion throughput.

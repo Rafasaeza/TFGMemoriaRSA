@@ -6,3 +6,55 @@
 
 \chapter{User Manual}
 \label{app:user_manual}
+
+\section{Application Service Ports and User Interfaces}
+\label{sec:service_ports_ui}
+
+Once the containerized microservice platform is initialized via Docker Compose, several services expose endpoints on the host machine. These endpoints allow developers, operators, and evaluators to interact directly with the platform, inspect telemetry data, and monitor anomaly detection workflows.
+
+Table~\ref{tab:service_ports} details all exposed host ports, distinguishing between graphical User Interfaces (accessible via standard web browsers) and backend protocol or API endpoints.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Application services, exposed ports, and user interface endpoints.}
+\label{tab:service_ports}
+\begin{tabularx}{\linewidth}{@{}l l l c X@{}}
+\toprule
+\textbf{Service} & \textbf{Host Port} & \textbf{Protocol / Access} & \textbf{Web UI} & \textbf{Description \& Credentials} \\
+\midrule
+\texttt{grafana} & \texttt{3000} & HTTP (\texttt{localhost:3000}) & \textbf{Yes} & Telemetry and anomaly visualization dashboards. Login: \texttt{admin} / \texttt{admin}. \\
+\addlinespace
+\texttt{sim-control-panel} & \texttt{8080} & HTTP (\texttt{localhost:8080}) & \textbf{Yes} & Web control panel for fleet mission dispatching, manual fault injection, and simulation resets. \\
+\addlinespace
+\texttt{redpanda-console} & \texttt{9080} & HTTP (\texttt{localhost:9080}) & \textbf{Yes} & Redpanda streaming console for inspecting Kafka topics, consumer lag, and partition offsets. \\
+\addlinespace
+\texttt{minio} (Console) & \texttt{9001} & HTTP (\texttt{localhost:9001}) & \textbf{Yes} & Object storage administration console. Inspects S3 buckets and Parquet tables. Login: \texttt{admin} / \texttt{admin123456}. \\
+\addlinespace
+\texttt{questdb} (Console) & \texttt{9000} & HTTP (\texttt{localhost:9000}) & \textbf{Yes} & Interactive SQL web console and REST execution API for querying time-series telemetry. \\
+\midrule
+\texttt{mosquitto} & \texttt{1883} & TCP (MQTT) & No & Edge messaging broker receiving VDA~5050 state and order payloads from AGVs. \\
+\addlinespace
+\texttt{questdb} (PG wire) & \texttt{8812} & PostgreSQL wire protocol & No & Database endpoint queried by Grafana. Read-only user: \texttt{grafana} / \texttt{grafana}. \\
+\addlinespace
+\texttt{questdb} (ILP) & \texttt{9009} & InfluxDB Line Protocol & No & High-throughput streaming ingestion port. \\
+\addlinespace
+\texttt{minio} (S3 API) & \texttt{19000} & HTTP (Amazon S3 REST) & No & S3-compatible API (mapped from container port 9000) for Spark Iceberg reads/writes. \\
+\addlinespace
+\texttt{redpanda} (Kafka) & \texttt{19092} & Kafka wire protocol & No & External Kafka API broker endpoint for external producers and consumer applications. \\
+\addlinespace
+\texttt{redpanda} (Admin) & \texttt{19644} & HTTP REST API & No & Administrative endpoint for cluster diagnostics and \texttt{rpk} CLI management. \\
+\addlinespace
+\texttt{kafka-connect} & \texttt{8083} & HTTP REST API & No & Kafka Connect REST API for connector configuration and status monitoring. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Internal Network Services}
+The remaining services operate exclusively within internal Docker bridge networks without exposing host ports, adhering to the principle of least privilege:
+\begin{itemize}
+    \item \texttt{simulator}: Vehicle simulator container executing in \texttt{mqtt-net}, connecting directly to \texttt{mosquitto:1883}.
+    \item \texttt{telegraf}: Protocol bridge container dual-homed in \texttt{mqtt-net} and \texttt{redpanda-net}.
+    \item \texttt{spark-processing}: Stream compute container executing Structured Streaming jobs within \texttt{redpanda-net} and \texttt{lakehouse-net}.
+    \item One-shot initialization containers (\texttt{redpanda-init}, \texttt{createbuckets}, \texttt{questdb-init}, and \texttt{questdb-kafka-connect-init}) terminate cleanly once bootstrapping is completed.
+\end{itemize}
