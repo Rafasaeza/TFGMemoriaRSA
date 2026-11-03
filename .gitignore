@@ -37,8 +37,8 @@
 build.log.biber
 build.log.makeindex
 
-# PDF generado
-main.pdf
+# PDF generado (descomentar si no se desea trackear en git)
+# main.pdf
 
 # System / editor
 .DS_Store
