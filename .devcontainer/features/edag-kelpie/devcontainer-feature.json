@@ -1,0 +1,18 @@
+{
+  "id": "edag-kelpie",
+  "version": "1.0.0",
+  "name": "EDAG Kelpie CLI",
+  "description": "Installs the EDAG Kelpie CLI (Ephyne AI gateway proxy) for the container user.",
+  "options": {
+    "atBuild": {
+      "type": "string",
+      "default": "never",
+      "description": "\"never\" (default): no build-time login attempt; setup-clis.sh installs Kelpie at container create and the edag-kelpie-login helper completes the device-code sign-in in your first terminal. \"optional\": also try to bake Kelpie into the image (redeem the SharePoint device-code login shown in the build log in a browser if one appears)."
+    },
+    "installerUrl": {
+      "type": "string",
+      "default": "https://gitlab-pages.edag.de/dare/kelpie/install.sh",
+      "description": "URL of the Kelpie bootstrap installer."
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "security": {
+    "auth": {
+      "selectedType": "gemini-api-key"
+    }
+  },
+  "model": {
+    "name": "auto-gemini-2.5"
+  }
+}

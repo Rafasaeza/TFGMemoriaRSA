@@ -1,0 +1,19 @@
+{
+  "id": "edag-codex",
+  "version": "1.0.0",
+  "name": "Codex CLI",
+  "description": "Installs the Codex CLI for the container user and stores the EDAG Codex config in the image; the feature's own postCreateCommand hook heals a missing CLI and rewrites the Kelpie base URL per detected mode at container create.",
+  "postCreateCommand": "bash /opt/edag/selfheal/codex.sh",
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "latest",
+      "description": "Codex CLI release passed to the native installer (\"latest\" follows the current upstream release, e.g. \"0.46.0\")."
+    },
+    "configUrl": {
+      "type": "string",
+      "default": "",
+      "description": "URL of a Codex config.toml to fetch into /opt/edag/codex-config.reference.toml. Empty string (default) skips the fetch and stores this feature's bundled EDAG config.toml."
+    }
+  }
+}

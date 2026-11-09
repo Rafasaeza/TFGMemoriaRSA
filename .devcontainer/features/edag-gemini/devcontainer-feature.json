@@ -1,0 +1,16 @@
+{
+  "id": "edag-gemini",
+  "version": "1.0.0",
+  "name": "Gemini CLI",
+  "description": "Installs the Google Gemini CLI via npm for the container user and stores the settings JSON in the image; setup-clis.sh copies it to ~/.gemini/settings.json and sets the Kelpie env at container create.",
+  "dependsOn": {
+    "ghcr.io/devcontainers/features/node:2": {}
+  },
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "latest",
+      "description": "npm version spec for @google/gemini-cli (\"latest\" follows the current upstream release)."
+    }
+  }
+}

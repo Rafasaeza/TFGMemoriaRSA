@@ -1,0 +1,8 @@
+model = "gpt-6-luna-gwc"
+model_provider = "open-edag-ai"
+personality = "pragmatic"
+
+[model_providers.open-edag-ai]
+name = "Open EDAG AI"
+base_url = "http://127.0.0.1:18080/openai/v1"
+wire_api = "responses"

@@ -1,0 +1,19 @@
+{
+  "id": "edag-opencode",
+  "version": "1.0.0",
+  "name": "OpenCode CLI",
+  "description": "Installs the OpenCode CLI for the container user and stores the DARE reference config in the image; the feature's own postCreateCommand hook heals a missing CLI and rewrites the Kelpie baseURL per detected mode at container create.",
+  "postCreateCommand": "bash /opt/edag/selfheal/opencode.sh",
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "latest",
+      "description": "OpenCode CLI version to install (\"latest\" follows the current upstream release)."
+    },
+    "configUrl": {
+      "type": "string",
+      "default": "https://gitlab-pages.edag.de/dare/codebuddy-config-guide/reference/opencode-config.json",
+      "description": "URL of the OpenCode reference config, stored at /opt/edag/opencode-config.reference.json. Empty string skips it (no reference config is stored)."
+    }
+  }
+}
