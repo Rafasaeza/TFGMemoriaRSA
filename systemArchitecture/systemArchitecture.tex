@@ -4,138 +4,169 @@
 
 \section{Introduction}
 
-In this chapter, we delve deeper into the system architecture design. As illustrated in Figure \ref{fig:e2e-architecture}, the proposed solution is structured into distinct, modular tiers, forming an End-to-End Streaming Architecture.
+In this chapter, we delve deeper into the system architecture design.
+As illustrated in Figure \ref{fig:e2e-architecture}, the proposed solution is structured into distinct, modular tiers, forming an End-to-End Streaming Architecture.
 
 The system relies on the following core layers:
 \begin{itemize}
-\item \textbf{Source Systems Layer:} This tier acts as the primary origin of truth. For the scope of this study, it comprises a high-performance simulation environment that generates all necessary operational and physical telemetry variables for subsequent analytics. In a prospective industrial deployment, this layer can be seamlessly extended to incorporate physical, production-grade autonomous mobile robots.
-\item \textbf{Broker MQTT Layer:} Serving as the initial edge gateway, this layer receives live telemetry payloads published directly by the source systems. While future iterations of the architecture might bypass this boundary—routing data directly through the central event streaming bus—deploying an independent MQTT broker establishes a robust and lightweight communication bridge tailored for IoT edge devices and complies with the requirements of the VDA5050 protocol.
-\item \textbf{Event Streaming Layer:} Functioning as the central nervous system of the application, this layer acts as a distributed event bus. It decouples the data emitters from the compute engines, guaranteeing reliable, low-latency message buffering and high-throughput streaming across the pipeline.
-\item \textbf{Stream \& Processing Layer:} Dedicated to continuous stream processing, this layer performs real-time computations and data transformation. It is architected to efficiently handle and process massive volumes of high-frequency data streams.
-\item \textbf{Data Lakehouse Layer:} Operating as the persistence backbone, this layer stores the historical telemetry required for downstream machine learning analytics. By adopting a Data Lakehouse paradigm, the system combines cost-effective object storage with DBMS-like ACID transactions. Furthermore, it implements the \textit{Medallion Architecture} (Bronze, Silver, and Gold tiers), preserving raw immutable ingestion data to ensure full reprocessing flexibility over time.
-\item \textbf{Machine Learning Layer:} This analytical module fulfills the primary objective of the research: real-time anomaly detection through advanced machine learning models consuming refined features from the data lakehouse.
-\item \textbf{Observability Layer:} Once operational metrics and diagnostic outputs are consolidated in the Gold layer, this tier presents actionable insights to operators through comprehensive visualization dashboards, enabling real-time monitoring of system health and robot anomalies.
+    \item \textbf{Source Systems Layer:} This tier acts as the primary origin of truth.
+    For the scope of this study, it comprises a high-performance simulation environment that generates all necessary operational and physical telemetry variables for subsequent analytics.
+    In a prospective industrial deployment, this layer can be seamlessly extended to incorporate physical, production-grade autonomous mobile robots.
+
+    \item \textbf{Broker MQTT Layer:} Serving as the initial edge gateway, this layer receives live telemetry payloads published directly by the source systems.
+    While future iterations of the architecture might bypass this boundary—routing data directly through the central event streaming bus—deploying an independent MQTT broker establishes a robust and lightweight communication bridge tailored for IoT edge devices and complies with the requirements of the VDA5050 protocol.
+
+    \item \textbf{Event Streaming Layer:} Functioning as the central nervous system of the application, this layer acts as a distributed event bus.
+    It decouples the data emitters from the compute engines, guaranteeing reliable, low-latency message buffering and high-throughput streaming across the pipeline.
+
+    \item \textbf{Stream \& Processing Layer:} Dedicated to continuous stream processing, this layer performs real-time computations and data transformation.
+    It is architected to efficiently handle and process massive volumes of high-frequency data streams.
+
+    \item \textbf{Data Lakehouse Layer:} Operating as the persistence backbone, this layer stores the historical telemetry required for downstream machine learning analytics.
+    By adopting a Data Lakehouse paradigm, the system combines cost-effective object storage with DBMS-like ACID transactions.
+    Furthermore, it implements the \textit{Medallion Architecture} (Bronze, Silver, and Gold tiers), preserving raw immutable ingestion data to ensure full reprocessing flexibility over time.
+
+    \item \textbf{Machine Learning Layer:} This analytical module fulfills the primary objective of the research: real-time anomaly detection through advanced machine learning models consuming refined features from the data lakehouse.
+
+    \item \textbf{Observability Layer:} Once operational metrics and diagnostic outputs are consolidated in the Gold layer, this tier presents actionable insights to operators through comprehensive visualization dashboards, enabling real-time monitoring of system health and robot anomalies.
 \end{itemize}
+
 \begin{figure}[ht]
   \centering
   \includegraphics[width=.85\linewidth]{TFGArquitectura.drawio.png}
-  \caption{Arquitechture schema from the E2E anomaly detection system.}
+  \caption{High-level conceptual architecture of the end-to-end anomaly detection platform.}
   \label{fig:e2e-architecture}
 \end{figure}
+
 \section{General Architectural Decisions}
+\label{sec:arch_decisions}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Sections~\ref{sec:implementation_methodology} and~\ref{sec:containerized_deployment}.}
 
 In addition to the component-specific design decisions presented in the following sections, several cross-cutting architectural principles were established to guide the development of the entire platform.
 
 \subsection{Containerized Microservice Architecture}
 
-The complete platform was designed following a containerized microservice approach. Each functional layer of the architecture is deployed as an independent Docker container, including the source systems, messaging infrastructure, stream processing services, data storage components, and machine learning modules.
+The complete platform was designed following a containerized microservice approach.
+Each functional layer of the architecture is deployed as an independent Docker container, including the source systems, messaging infrastructure, stream processing services, data storage components, and machine learning modules.
 
-This modular design provides several advantages. First, it promotes loose coupling between system components, allowing individual services to be developed, tested, and maintained independently. Second, it simplifies system scalability, since each component can be replicated or upgraded without affecting the rest of the platform. Finally, it increases the long-term maintainability of the solution, as individual modules may be replaced by alternative implementations provided that the communication interfaces remain unchanged. Consequently, the architecture is centered on well-defined interfaces rather than on specific software implementations, facilitating future evolution of the platform.
+This modular design provides several advantages.
+First, it promotes loose coupling between system components, allowing individual services to be developed, tested, and maintained independently.
+Second, it simplifies system scalability, since each component can be replicated or upgraded without affecting the rest of the platform.
+Finally, it increases the long-term maintainability of the solution, as individual modules may be replaced by alternative implementations provided that the communication interfaces remain unchanged.
+Consequently, the architecture is centered on well-defined interfaces rather than on specific software implementations, facilitating future evolution of the platform.
 
 \subsection{Interface-Oriented Design}
 
-To maximize interoperability and future extensibility, communication between architectural layers is performed through standardized interfaces and message formats. This design principle ensures that a component can be replaced without requiring major modifications in the remaining layers. For example, the simulated AGV fleet used during development could be replaced by a real fleet management system, while preserving the same MQTT and VDA 5050 communication contracts. As a result, the architecture remains independent of specific hardware vendors or software providers.
+To maximize interoperability and future extensibility, communication between architectural layers is performed through standardized interfaces and message formats.
+This design principle ensures that a component can be replaced without requiring major modifications in the remaining layers.
+For example, the simulated AGV fleet used during development could be replaced by a real fleet management system, while preserving the same MQTT and VDA 5050 communication contracts.
+As a result, the architecture remains independent of specific hardware vendors or software providers.
 
-\subsection{Event-Driven Architecture} An event-driven architecture was adopted as the communication paradigm for the entire platform. Rather than relying on direct point-to-point interactions between services, all components communicate through an intermediate event streaming layer. This approach significantly reduces coupling between producers and consumers, allowing individual services to evolve independently without affecting other parts of the system. Additionally, new services can be integrated into the platform with minimal effort by subscribing to the existing event streams. The event streaming layer acts as the system's central source of truth, providing a unified and consistent mechanism for distributing telemetry, operational events, and analytical results across the architecture. This design improves scalability, extensibility, and maintainability while facilitating the integration of future data processing and monitoring capabilities.
+\subsection{Event-Driven Architecture}
+
+An event-driven architecture was adopted as the communication paradigm for the entire platform.
+Rather than relying on direct point-to-point interactions between services, all components communicate through an intermediate event streaming layer.
+This approach significantly reduces coupling between producers and consumers, allowing individual services to evolve independently without affecting other parts of the system.
+Additionally, new services can be integrated into the platform with minimal effort by subscribing to the existing event streams.
+The event streaming layer acts as the system's central source of truth, providing a unified and consistent mechanism for distributing telemetry, operational events, and analytical results across the architecture.
+This design improves scalability, extensibility, and maintainability while facilitating the integration of future data processing and monitoring capabilities.
 
 \subsection{Separation of Training and Inference Pipelines}
-The machine learning subsystem was designed following a clear separation between training and inference workloads. Model training is performed offline using Python-based machine learning frameworks that consume historical data and engineered features stored in Apache Iceberg tables. This approach provides flexibility for feature engineering, experimentation, hyperparameter tuning, and model evaluation.
 
-In contrast, model inference is integrated directly into the Apache Spark streaming pipeline. Once a model has been trained and validated, it is exported and embedded into the stream processing layer, allowing predictions to be generated in real time as new AGV telemetry events are processed. This design avoids the latency associated with external prediction services and enables seamless integration with the event-driven architecture.
+The machine learning subsystem was designed following a clear separation between training and inference workloads.
+Model training is performed offline using Python-based machine learning frameworks that consume historical data and engineered features stored in Apache Iceberg tables.
+This approach provides flexibility for feature engineering, experimentation, hyperparameter tuning, and model evaluation.
 
-The separation of training and inference responsibilities allows each workload to be optimized independently. Training processes prioritize model accuracy and experimentation capabilities, whereas inference processes prioritize low latency, scalability, and operational reliability. Furthermore, the architecture facilitates future model updates, since newly trained models can be deployed to the streaming environment without requiring modifications to the surrounding data processing infrastructure.
+In contrast, model inference is integrated directly into the Apache Spark streaming pipeline.
+Once a model has been trained and validated, it is exported and embedded into the stream processing layer, allowing predictions to be generated in real time as new AGV telemetry events are processed.
+This design avoids the latency associated with external prediction services and enables seamless integration with the event-driven architecture.
+
+The separation of training and inference responsibilities allows each workload to be optimized independently.
+Training processes prioritize model accuracy and experimentation capabilities, whereas inference processes prioritize low latency, scalability, and operational reliability.
+Furthermore, the architecture facilitates future model updates, since newly trained models can be deployed to the streaming environment without requiring modifications to the surrounding data processing infrastructure.
+
 \section{Source Systems Layer}
-In designing the data ingestion pipeline, a preliminary study was conducted to determine the optimal source of truth for the system. At first, the possibility of utilizing a physical Autonomous Mobile Robot (AMR) in real time was evaluated. However, this approach was discarded for the training phase due to two primary constraints: first, only a single real unit was available, which is insufficient to represent a fleet-scale source system; second, the physical hardware lacked the specific internal telemetry sensors required for comprehensive anomaly detection analytics.
+\label{sec:arch_source_systems}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:source_system_simulation}.}
 
-As a second approach, a search was conducted for publicly available industrial datasets containing multi-variable telemetry from AGVs and AMRs. While several sources were identified, none provided the precise combination of electrical, mechanical, and thermal variables necessary for the anomaly detection module.
+In designing the data ingestion pipeline, a preliminary study was conducted to determine the optimal source of truth for the system.
+At first, the possibility of utilizing a physical Autonomous Mobile Robot (AMR) in real time was evaluated.
+However, this approach was discarded for the training phase due to two primary constraints: first, only a single real unit was available, which is insufficient to represent a fleet-scale source system; second, the physical hardware lacked the specific internal telemetry sensors required for comprehensive anomaly detection analytics.
 
-Given the limitations of both physical deployments and existing public datasets, the decision was made to implement a high-performance simulation framework capable of emulating an entire fleet of AGVs deterministically. Since the chosen simulation environment, built upon the open-source repository \texttt{bekirbostanci/vda5050\_vehicle\_simulator} \cite{bostanciVda5050}, did not natively incorporate deep physical powertrain dynamics, it was adapted to model core electromechanical and thermal variables. To ensure seamless integration with downstream data consumers, the messages published by the simulated robots strictly adhere to the \textbf{VDA 5050} \cite{vda5050standard} interoperability standard, extended to include custom telemetry payloads.
+As a second approach, a search was conducted for publicly available industrial datasets containing multi-variable telemetry from AGVs and AMRs.
+While several sources were identified, none provided the precise combination of electrical, mechanical, and thermal variables necessary for the anomaly detection module.
 
-The following JSON payload illustrates the structure of the telemetry and state messages emitted by the adapted source systems:
+Given the limitations of both physical deployments and existing public datasets, the decision was made to implement a high-performance simulation framework capable of emulating an entire fleet of AGVs deterministically.
+Since the chosen simulation environment, built upon the open-source repository \texttt{bekirbostanci/vda5050\_vehicle\_simulator} \cite{bostanciVda5050}, did not natively incorporate deep physical powertrain dynamics, it was adapted to model core electromechanical and thermal variables.
+To ensure seamless integration with downstream data consumers, the messages published by the simulated robots strictly adhere to the \textbf{VDA 5050} \cite{vda5050standard} interoperability standard, extended to include custom telemetry payloads.
 
-\begin{lstlisting}[language=json, caption={Example VDA 5050 telemetry message}, label={lst:vda5050-telemetry}, basicstyle=\ttfamily\small, breaklines=true]
-{
-  "actionStates": [],
-  "agvPosition": {
-    "mapId": "messe_f1",
-    "positionInitialized": false,
-    "theta": 0,
-    "x": -0.26424313,
-    "y": -1.4748409
-  },
-  "batteryState": {
-    "batteryCharge": 99.8,
-    "batteryHealth": 100,
-    "batteryVoltage": 24.023438,
-    "charging": false
-  },
-  "driving": false,
-  "edgeStates": [],
-  "errors": "[]",
-  "headerId": 20,
-  "information": "[{\"infoDescription\":\"Dynamic powertrain telemetry\",\"infoLevel\":\"INFO\",\"infoReferences\":[{\"referenceKey\":\"motor_current\",\"referenceValue\":\"0.45\"},{\"referenceKey\":\"motor_voltage\",\"referenceValue\":\"24.02\"},{\"referenceKey\":\"motor_temp\",\"referenceValue\":\"24.73\"},{\"referenceKey\":\"vibration_rms\",\"referenceValue\":\"0.011\"},{\"referenceKey\":\"motor_speed_rad_s\",\"referenceValue\":\"0.00\"},{\"referenceKey\":\"motor_torque_nm\",\"referenceValue\":\"0.000\"},{\"referenceKey\":\"back_emf_v\",\"referenceValue\":\"0.00\"},{\"referenceKey\":\"wheel_slip\",\"referenceValue\":\"0.0042\"},{\"referenceKey\":\"motor_power_w\",\"referenceValue\":\"0.4\"},{\"referenceKey\":\"battery_current_a\",\"referenceValue\":\"0.43\"},{\"referenceKey\":\"battery_soc_pct\",\"referenceValue\":\"99.80\"},{\"referenceKey\":\"battery_health_pct\",\"referenceValue\":\"100\"},{\"referenceKey\":\"battery_temp_c\",\"referenceValue\":\"21.9\"},{\"referenceKey\":\"fault_active\",\"referenceValue\":\"false\"},{\"referenceKey\":\"fault_types\",\"referenceValue\":\"\"}],\"infoType\":\"motor_telemetry\"}]",
-  "lastNodeId": "",
-  "lastNodeSequenceId": 0,
-  "loads": [],
-  "manufacturer": "rikeb",
-  "nodeStates": [],
-  "operatingMode": "AUTOMATIC",
-  "orderId": "",
-  "orderUpdateId": 0,
-  "safetyState": {
-    "eStop": "NONE",
-    "fieldViolation": false
-  },
-  "serialNumber": "t13",
-  "timestamp": "2026-10-14T09:25:18.783Z",
-  "velocity": {
-    "omega": 0,
-    "vx": 0,
-    "vy": 0
-  },
-  "version": "2.0.0"
-}
-\end{lstlisting}
+\section{MQTT Broker Layer}
+\label{sec:arch_mqtt}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:mqtt_broker_implementation}.}
 
-\section{MQTT Broker Layer} 
-The adoption of the VDA 5050 communication standard directly influenced the design of the messaging layer. Since VDA 5050 defines MQTT as the underlying communication protocol between fleet management systems and AGVs, the incorporation of an MQTT broker became a fundamental architectural requirement. 
+The adoption of the VDA 5050 communication standard directly influenced the design of the messaging layer.
+Since VDA 5050 defines MQTT as the underlying communication protocol between fleet management systems and AGVs, the incorporation of an MQTT broker became a fundamental architectural requirement.
 
-The broker layer acts as an intermediary between telemetry producers and data consumers, enabling asynchronous communication and decoupling the different system components. This approach allows producers and consumers to evolve independently while maintaining interoperability through standardized message exchanges. 
+The broker layer acts as an intermediary between telemetry producers and data consumers, enabling asynchronous communication and decoupling the different system components.
+This approach allows producers and consumers to evolve independently while maintaining interoperability through standardized message exchanges.
 
-Several MQTT broker implementations were evaluated during the architectural design phase. Eclipse Mosquitto was ultimately selected due to its maturity, open-source licensing model, low resource consumption, Docker compatibility, and widespread adoption within Industrial Internet of Things (IIoT) environments. 
+Several MQTT broker implementations were evaluated during the architectural design phase.
+Eclipse Mosquitto was ultimately selected due to its maturity, open-source licensing model, low resource consumption, Docker compatibility, and widespread adoption within Industrial Internet of Things (IIoT) environments.
 
-Furthermore, the publish/subscribe communication model facilitates horizontal scalability and simplifies the integration of future services. New consumers can subscribe to existing telemetry streams without requiring modifications to the source systems, making the architecture more extensible and maintainable.
+Furthermore, the publish/subscribe communication model facilitates horizontal scalability and simplifies the integration of future services.
+New consumers can subscribe to existing telemetry streams without requiring modifications to the source systems, making the architecture more extensible and maintainable.
 
-\section{Event Streaming Bus Layer}
-To establish an enterprise-grade backbone for telemetry ingestion, storage, and analytics, the architecture incorporates a distributed event streaming platform. While the MQTT layer excels at lightweight device-to-broker messaging, an append-only distributed log is essential to serve as the immutable single source of truth, handle high-throughput event replay, and decouple analytical consumers from edge producers.
+\section{Event Streaming Layer}
+\label{sec:arch_event_streaming}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:event_stream_implementation}.}
+
+To establish an enterprise-grade backbone for telemetry ingestion, storage, and analytics, the architecture incorporates a distributed event streaming platform.
+While the MQTT layer excels at lightweight device-to-broker messaging, an append-only distributed log is essential to serve as the immutable single source of truth, handle high-throughput event replay, and decouple analytical consumers from edge producers.
 
 \subsection{Kafka provider selection}
-During the architectural design phase, distributed streaming technologies were evaluated. Although Apache Kafka represents the industry benchmark, \textbf{Redpanda} was selected as the central event broker. Redpanda provides complete protocol-level compatibility with the Apache Kafka API, allowing ecosystem tools—such as Apache Spark Structured Streaming and Kafka Connect—to operate seamlessly without modification or proprietary client adapters.
+
+During the architectural design phase, distributed streaming technologies were evaluated.
+Although Apache Kafka represents the industry benchmark, \textbf{Redpanda} was selected as the central event broker.
+Redpanda provides complete protocol-level compatibility with the Apache Kafka API, allowing ecosystem tools—such as Apache Spark Structured Streaming and Kafka Connect—to operate seamlessly without modification or proprietary client adapters.
 
 The decision to adopt Redpanda instead of traditional Apache Kafka is justified by several architectural advantages:
 \begin{itemize}
-    \item \textbf{Native Performance and Predictable Latency:} Redpanda is engineered in C++ utilizing the Seastar asynchronous framework with a thread-per-core architecture. This eliminates the Java Virtual Machine (JVM) runtime overhead and avoids Stop-the-World Garbage Collection (GC) pauses.
-    \item \textbf{Architectural Simplicity and Self-Contained Topology:} Unlike traditional Kafka deployments requiring dedicated Apache ZooKeeper clusters or resource-intensive KRaft JVM controllers, Redpanda implements native Raft\cite{raftgithub} consensus embedded directly within the broker binary. This significantly reduces operational complexity, container footprint, and deployment startup times.
+    \item \textbf{Native Performance and Predictable Latency:} Redpanda is engineered in C++ utilizing the Seastar asynchronous framework with a thread-per-core architecture.
+    This eliminates the Java Virtual Machine (JVM) runtime overhead and avoids Stop-the-World Garbage Collection (GC) pauses.
+
+    \item \textbf{Architectural Simplicity and Self-Contained Topology:} Unlike traditional Kafka deployments requiring dedicated Apache ZooKeeper clusters or resource-intensive KRaft JVM controllers, Redpanda implements native Raft\cite{raftgithub} consensus embedded directly within the broker binary.
+    This significantly reduces operational complexity, container footprint, and deployment startup times.
+
     \item \textbf{Resource Efficiency in Edge and Development Environments:} The lightweight footprint of Redpanda enables high throughput and reliable partitioned persistence while conserving host computing resources, making it exceptionally well-suited for containerized edge gateways and Proof-of-Concept (PoC) deployments.
+
     \item \textbf{Integrated Developer Tooling:} The platform bundles the \texttt{rpk} management utility and the Redpanda Console user interface out of the box, streamlining topic inspection, consumer-group monitoring, and partition offset observability without requiring external monitoring containers.
 \end{itemize}
 
-By leveraging Redpanda as the event streaming backbone, the platform ensures durable event persistence, horizontal scalability, ordered event processing, and seamless integration with the wider Kafka ecosystem. These characteristics make it an appropriate foundation for the real-time data ingestion and analytics requirements of the proposed architecture.
-\subsection{Kafka Topic Design} The creation of topics in Redpanda follows specific design considerations to efficiently organize telemetry streams, operational events, and analytical data flows. Topics were designed to provide clear separation of concerns, facilitate independent consumer processing, and support the event-driven communication model adopted throughout the platform. Table~\ref{tab:kafka-topic-design} summarizes the topic naming conventions, data content, and information flow within the proposed architecture.
+By leveraging Redpanda as the event streaming backbone, the platform ensures durable event persistence, horizontal scalability, ordered event processing, and seamless integration with the wider Kafka ecosystem.
+These characteristics make it an appropriate foundation for the real-time data ingestion and analytics requirements of the proposed architecture.
 
+\subsection{Kafka Topic Design}
+
+The creation of topics in Redpanda follows specific design considerations to efficiently organize telemetry streams, operational events, and analytical data flows.
+Topics were designed to provide clear separation of concerns, facilitate independent consumer processing, and support the event-driven communication model adopted throughout the platform.
+Table~\ref{tab:kafka-topic-design} summarizes the topic naming conventions, data content, and information flow within the proposed architecture.
+
+%%% TODO(retention): anadir columna "Retention policy" cuando se decidan los valores por topico.
 \begin{table}[htbp]
 \centering
-\small
-\caption{Kafka topic design and data flow.}
+\footnotesize
+\caption{Kafka topic design, data flow, and partitioning key.}
 \label{tab:kafka-topic-design}
 \begin{tabularx}{\linewidth}{@{}
-  >{\ttfamily\raggedright\arraybackslash}p{3.0cm}
+  >{\ttfamily\raggedright\arraybackslash}p{2.5cm}
+  >{\ttfamily\raggedright\arraybackslash}p{2.2cm}
   >{\raggedright\arraybackslash}X
   >{\raggedright\arraybackslash}X
-  >{\raggedright\arraybackslash}p{2.2cm}
-  >{\raggedright\arraybackslash}p{2.4cm}@{}}
+  >{\raggedright\arraybackslash}p{2.1cm}
+  >{\raggedright\arraybackslash}p{2.3cm}@{}}
 \toprule
 \textrm{\textbf{Topic name}} &
+\textrm{\textbf{Partition key}} &
 \textbf{Name selection} &
 \textbf{Content} &
 \textbf{Produced by} &
@@ -143,6 +174,7 @@ By leveraging Redpanda as the event streaming backbone, the platform ensures dur
 \midrule
 
 vda5050-state &
+manufacturer\newline serialNumber &
 Reflects the standardized VDA 5050 state messages generated by automated guided vehicles (AGVs) \cite{vda5050standard}. &
 Raw telemetry and operational state messages contained in the VDA 5050 payload. &
 MQTT broker, bridged through Telegraf. &
@@ -151,7 +183,8 @@ Apache Spark Structured Streaming. \\
 \midrule
 
 vda5050-state-\allowbreak deduplicated &
-Identifies cleaned state messages, distinguishing state transitions from redundant heartbeat updates. &
+manufacturer\newline serialNumber &
+Identifies cleaned state messages, distinguishing genuine state transitions from redundant heartbeat updates. &
 Deduplicated VDA 5050 state records preserving genuine physical and operational changes. &
 Apache Spark Structured Streaming. &
 Apache Spark Structured Streaming. \\
@@ -159,6 +192,7 @@ Apache Spark Structured Streaming. \\
 \midrule
 
 fleet-features &
+manufacturer\newline serialNumber &
 Represents fleet-level operational features extracted and enriched from raw vehicle telemetry. &
 Processed telemetry, including derived kinematic and electrical features. &
 Apache Spark Structured Streaming. &
@@ -167,6 +201,7 @@ Apache Spark Structured Streaming and QuestDB via Kafka Connect. \\
 \midrule
 
 ai-anomalies &
+manufacturer\newline serialNumber &
 Identifies the outputs of the artificial intelligence module, distinguishing anomaly results from raw telemetry and derived features. &
 Inference outputs, including anomaly scores, reconstruction errors, and diagnostic information. &
 Apache Spark Structured Streaming. &
@@ -176,8 +211,21 @@ QuestDB via Kafka Connect. \\
 \end{tabularx}
 \end{table}
 
+A defining element of the topic design is the selection of a consistent partitioning key across the streaming backbone.
+All telemetry topics use the composite key \texttt{manufacturer : serialNumber}, which in the VDA~5050 standard unambiguously identifies a single physical vehicle \cite{vda5050standard}.
+This choice is motivated by two complementary architectural guarantees.
+First, because a Kafka-compatible log preserves ordering only \emph{within} a partition, routing every message of a given AGV to a fixed partition ensures strict chronological ordering of its state transitions, a prerequisite for correct kinematic reconstruction and windowed feature computation downstream.
+Second, prefixing the serial number with the manufacturer prevents hash collisions between distinct vehicles that could otherwise share an identical serial number.
+At the same time, different vehicles are hashed to different partitions, allowing analytical consumers such as Apache Spark to process distinct AGVs in parallel.
+The key is therefore applied uniformly across the ingestion, feature, and inference topics so that the per-asset ordering guarantee is preserved end to end across the Bronze, Silver, and Gold tiers.
+
 \section{Streaming Integration and Inter-Service Connectivity}
-A critical requirement of the event-driven architecture is ensuring clean separation of concerns across the ingestion, streaming, storage, and processing tiers. Rather than tightly coupling producers and consumers to the central streaming bus, the integration topology relies on standardized connectors and specialized bridges. This approach isolates protocol adaptations to the respective system boundaries, preserving the raw VDA~5050 telemetry format within the central event log, more details in the following subsections.
+\label{sec:arch_streaming_integration}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:stream_integration_implementation}.}
+
+A critical requirement of the event-driven architecture is ensuring clean separation of concerns across the ingestion, streaming, storage, and processing tiers.
+Rather than tightly coupling producers and consumers to the central streaming bus, the integration topology relies on standardized connectors and specialized bridges.
+This approach isolates protocol adaptations to the respective system boundaries, preserving the raw VDA~5050 telemetry format within the central event log, more details in the following subsections.
 
 The end-to-end data pipeline and inter-service connectivity model are illustrated in Figure~\ref{fig:streaming-integration-architecture}.
 
@@ -191,55 +239,67 @@ The end-to-end data pipeline and inter-service connectivity model are illustrate
 The rationale and implementation details for each integration interface are summarized below:
 
 \subsection{MQTT to Event Streaming Ingestion Layer}
+
 An architectural decision was required to establish the data bridge between the edge messaging layer (Eclipse Mosquitto) and the central event streaming bus (Redpanda), ensuring that vehicle telemetry producers remain decoupled from Kafka-specific protocols.
 
-During the design phase, deploying a dedicated Apache Kafka Connect MQTT Source connector was evaluated. However, the MQTT ingestion boundary only requires protocol adaptation between MQTT and Kafka-compatible event streams, without the need for advanced connector lifecycle management, schema evolution, or stream transformations. Consequently, introducing a full Kafka Connect framework at this stage was considered architecturally unnecessary. Instead, Telegraf was selected as a dedicated telemetry ingestion agent because it provides native MQTT consumer and Kafka producer capabilities, enabling direct protocol bridging while preserving the original telemetry payloads. This approach minimizes architectural complexity, reduces the number of operational dependencies, and keeps the ingestion boundary focused exclusively on message transport responsibilities.
+During the design phase, deploying a dedicated Apache Kafka Connect MQTT Source connector was evaluated.
+However, the MQTT ingestion boundary only requires protocol adaptation between MQTT and Kafka-compatible event streams, without the need for advanced connector lifecycle management, schema evolution, or stream transformations.
+Consequently, introducing a full Kafka Connect framework at this stage was considered architecturally unnecessary.
+Instead, Telegraf was selected as a dedicated telemetry ingestion agent because it provides native MQTT consumer and Kafka producer capabilities, enabling direct protocol bridging while preserving the original telemetry payloads.
+This approach minimizes architectural complexity, reduces the number of operational dependencies, and keeps the ingestion boundary focused exclusively on message transport responsibilities.
 
 \subsection{Streaming to Time-Series Persistence: Decoupled Kafka Connect for QuestDB}
-For real-time operational monitoring and visualization in Grafana, events must be streamed continuously into \textbf{QuestDB}. Instead of relying on bespoke consumers or embedding message-bus client logic into the storage layer, the industry-standard \textbf{Apache Kafka Connect} framework was adopted in sink mode (\texttt{io.questdb.kafka.QuestDBSinkConnector}).
-\begin{itemize}
-    \item \textbf{Fault Isolation:} Operating the sink inside a dedicated Kafka Connect container isolates ingestion buffering, offset commits, and deserialization errors from both the broker and the database engine.
-    \item \textbf{Custom Single Message Transform (SMT):} Because columnar time-series databases like QuestDB enforce scalar relational types and reject heterogeneous nested object arrays, a custom Java SMT (\texttt{StringifyFields\$Value}) was developed. This transform executes in memory at the sink boundary, serializing the VDA~5050 \texttt{information} and \texttt{errors} arrays into plain JSON strings (\texttt{VARCHAR}). This enables downstream SQL querying via QuestDB's native \texttt{json\_extract()} functions without altering the canonical event stored in Redpanda.
-    \item \textbf{Structural Flattening:} Standard Connect transformations (\texttt{Flatten\$Value}) map nested position and kinematics structures (e.g., \texttt{agvPosition.x}) directly into scalar database columns (\texttt{agvPosition\_x}).
-\end{itemize}
+
+For real-time operational monitoring and visualization in Grafana, events must be streamed continuously into \textbf{QuestDB}.
+Instead of relying on bespoke consumers or embedding message-bus client logic into the storage layer, the industry-standard \textbf{Apache Kafka Connect} framework was adopted in sink mode (\texttt{io.questdb.kafka.QuestDBSinkConnector}).
+
+NEEDS TO BE COMPLETED!
+
 \subsection{Event Streaming to Analytical Processing Connectivity}
+
 An architectural evaluation was conducted to determine how to interface the central event streaming bus (Redpanda) with the analytical engine (\textbf{Apache Spark}) for downstream anomaly detection workloads.
 
-Specifically, it was assessed whether an intermediate connector service or an external data-staging layer was required to bridge both systems. It was decided to connect Apache Spark directly to Redpanda by leveraging Spark's built-in, native Kafka streaming support. 
+Specifically, it was assessed whether an intermediate connector service or an external data-staging layer was required to bridge both systems.
+It was decided to connect Apache Spark directly to Redpanda by leveraging Spark's built-in, native Kafka streaming support.
 
-Because Apache Spark incorporates first-class Kafka protocol consumer capabilities out of the box, deploying a dedicated connector service or third-party middleware was deemed unnecessary. This decision significantly simplifies the deployment topology, reduces the overall component footprint, and eliminates architectural redundancy, allowing analytical workloads to consume raw telemetry streams directly from the message bus with minimal latency.
+Because Apache Spark incorporates first-class Kafka protocol consumer capabilities out of the box, deploying a dedicated connector service or third-party middleware was deemed unnecessary.
+This decision significantly simplifies the deployment topology, reduces the overall component footprint, and eliminates architectural redundancy, allowing analytical workloads to consume raw telemetry streams directly from the message bus with minimal latency.
 
 \section{Stream \& Processing Layer: Apache Spark}
 \label{sec:spark-stream-processing}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:spark-implementation}.}
 
-In defining the computational backbone for telemetry transformation, analytical feature engineering, and scalable inference, an architectural decision was made regarding the stream processing engine. \textbf{Apache Spark}, utilizing its \textbf{Structured Streaming} framework, was selected as the central engine for this layer.
+In defining the computational backbone for telemetry transformation, analytical feature engineering, and scalable inference, an architectural decision was made regarding the stream processing engine.
+\textbf{Apache Spark}, utilizing its \textbf{Structured Streaming} framework, was selected as the central engine for this layer.
 
 In accordance with the scope of this chapter, this section outlines the architectural design decisions, component responsibilities, and data contracts that govern the stream processing tier, whereas the implementation is addressed in (Chapter~\ref{chap:system_implementation}).
 
-While distributed event logs like Redpanda provide durable message buffering, they lack high-level compute primitives for complex multi-stage data processing and distributed machine learning inference. Apache Spark was selected based on the following architectural design principles:
+While distributed event logs like Redpanda provide durable message buffering, they lack high-level compute primitives for complex multi-stage data processing and distributed machine learning inference.
+Apache Spark was selected based on the following architectural design principles:
+
 \begin{itemize}
-    \item \textbf{End-to-End Horizontal Scalability:} Telemetry volumes scale proportionally with the number of operational AGVs. Decoupling stream processing into a distributed engine ensures that computational bottlenecks are eliminated at the architectural level, allowing processing capacity to scale across partitions without altering application logic.
+    \item \textbf{End-to-End Horizontal Scalability:} Telemetry volumes scale proportionally with the number of operational AGVs.
+    Decoupling stream processing into a distributed engine ensures that computational bottlenecks are eliminated at the architectural level, allowing processing capacity to scale across partitions without altering application logic.
+
     \item \textbf{First-Class Lakehouse Integration:} Selecting an engine with native support for open table formats (\textbf{Apache Iceberg}) ensures transactional consistency (ACID guarantees), snapshot isolation, and seamless interoperability with the S3-compatible storage layer without requiring external data ingestion services.
-    \item \textbf{Adoption of a Dual-Sink Streaming Pattern:} Rather than coupling stream processing to a single egress target, it was decided to adopt a dual-sink architectural pattern across processing stages. Under this design decision, Spark concurrently commits processed records to historical Iceberg tables for long-term analytics while republishing the transformed events back into dedicated Redpanda topics for low-latency downstream consumption.
+
+    \item \textbf{Adoption of a Dual-Sink Streaming Pattern:} Rather than coupling stream processing to a single egress target, it was decided to adopt a dual-sink architectural pattern across processing stages.
+    Under this design decision, Spark concurrently commits processed records to historical Iceberg tables for long-term analytics while republishing the transformed events back into dedicated Redpanda topics for low-latency downstream consumption.
 \end{itemize}
 
-From an architectural perspective, the trade-off between continuous, single-event streaming (as offered by engines such as Apache Flink or Kafka Streams) and the micro-batch execution model was evaluated. While single-event engines achieve marginally lower nominal latencies, the micro-batch approach was selected because the sub-second latency provided by Spark Structured Streaming fully satisfies the temporal requirements of AGV telemetry (sampling between 1~Hz and 10~Hz). Furthermore, micro-batching significantly simplifies transaction coordination, commit atomicity, and file compaction when interfacing with lakehouse table formats, offering a more balanced architectural trade-off for this platform.
+From an architectural perspective, the trade-off between continuous, single-event streaming (as offered by engines such as Apache Flink or Kafka Streams) and the micro-batch execution model was evaluated.
+While single-event engines achieve marginally lower nominal latencies, the micro-batch approach was selected because the sub-second latency provided by Spark Structured Streaming fully satisfies the temporal requirements of AGV telemetry (sampling between 1~Hz and 10~Hz).
+Furthermore, micro-batching significantly simplifies transaction coordination, commit atomicity, and file compaction when interfacing with lakehouse table formats, offering a more balanced architectural trade-off for this platform.
 
 \subsection{Medallion Processing Pipeline and Job Topology}
 
-To avoid monolithic processing architectures and enforce strict separation of concerns across data maturity levels, the stream processing tier is decomposed into three decoupled streaming stages following the \textbf{Medallion Architecture} pattern (Bronze, Silver, and Gold tiers). Each stage is architecturally designed around distinct operational contracts, input/output interfaces, and analytical responsibilities:
+To avoid monolithic processing architectures and enforce strict separation of concerns across data maturity levels, the stream processing tier is decomposed into three decoupled streaming stages following the \textbf{Medallion Architecture} pattern (Bronze, Silver, and Gold tiers).
+Each stage is architecturally designed around distinct operational contracts, input/output interfaces, and analytical responsibilities:
 
 \begin{enumerate}
-    \item \textbf{Job 1: Raw to Bronze (State-Change Deduplication):}
-    High-frequency AGV telemetry often emits redundant messages where physical states and operational variables remain unchanged between consecutive sampling intervals, with only the timestamp field updating. Ingesting these identical records directly into analytical storage introduces unnecessary storage bloat and skews downstream machine learning algorithms.
-
-    To resolve this at the architectural boundary, the Bronze ingestion stage establishes a state-change filtering contract. Consuming from the raw \texttt{vda5050-state} topic, this job evaluates changes across physical variables and operational states (e.g., position coordinates, battery charge, motor temperature, driving mode) rather than relying solely on temporal increments. Only records representing genuine state transitions or physical measurements changes are persisted to the Bronze Iceberg tier, while concurrently republished to the intermediate topic \texttt{vda5050-state-deduplicated} to supply downstream consumers with high-density, noise-free state data.
-
-    \item \textbf{Job 2: Bronze to Silver (Feature Extraction and Kinematic Aggregations):}
-    The architectural role of the Silver stage is to isolate feature engineering from both raw ingestion and downstream inference. Consuming from \texttt{vda5050-state-deduplicated}, this stage unpacks nested telemetry structures and translates raw sensor readings into canonical, model-ready features (e.g., instantaneous electrical power, rolling-window speed differentials, and acceleration vectors). Following the dual-sink contract, the enriched feature set is materialized into the Silver Iceberg tier for offline model training and historical analysis, while simultaneously emitted to the \texttt{fleet-features} Redpanda topic for real-time downstream consumers.
-
+    \item \textbf{Job 1: VDA5050 State Writer (Raw to Bronze Persistence)} The telemetry generated by AGVs constitutes a continuous stream of operational data. While this stream is suitable for real-time communication between system components, it cannot be considered a reliable long-term source for analytics, auditing, or machine learning workloads. Messages stored only in Kafka are inherently transient and depend on retention policies, making them unsuitable as the primary source for historical analysis. Consequently, a persistent storage layer is required to preserve the complete history of vehicle telemetry. This historical repository enables offline data exploration, reproducible machine learning experiments, anomaly investigations, and system traceability. Several architectural alternatives were considered during the design phase. One possibility consisted of storing only the latest state of each AGV. This approach was discarded because anomaly detection models require access to historical behaviour patterns rather than individual snapshots. Another alternative involved applying state-change deduplication during ingestion to reduce storage requirements. However, due to the continuous variation of sensor readings and the stochastic noise introduced by the simulator, consecutive messages rarely contain identical payloads. The storage savings obtained from deduplication would therefore be limited while introducing additional processing complexity. For these reasons, the Bronze layer was designed as an immutable repository containing all incoming VDA5050 telemetry messages without modifications, filtering operations, or feature extraction. The \texttt{vda5050-state-writer} job is responsible for materialising this architectural decision by persisting the complete telemetry stream from the \texttt{vda5050-state} topic into an Apache Iceberg table. The resulting dataset serves as the authoritative historical record of the system. \item \textbf{Job 2: Bronze to Silver (Feature Extraction and Kinematic Aggregations)} Although the Bronze layer preserves the original telemetry stream, the VDA5050 message format is primarily designed for interoperability between fleet management systems and AGVs rather than analytical processing. As a consequence, messages contain nested structures and arrays that introduce unnecessary complexity for querying, statistical analysis, and machine learning workflows. To decouple the operational representation of telemetry from analytical requirements, a dedicated Silver layer was introduced. The objective of this layer is to expose a clean, structured, and domain-oriented representation of the information that can be consumed consistently by data analytics and machine learning components. The transformations performed in this stage are described below. \paragraph{Flattening} The first design decision concerns the representation of telemetry data. Directly exposing nested VDA5050 messages to downstream consumers would require every analytical component to repeatedly navigate hierarchical structures. Such an approach would increase implementation complexity and reduce interoperability between processing modules. To address this issue, a flattening process converts the original hierarchical message into a tabular schema. This representation is more suitable for Apache Spark processing, Apache Iceberg storage, and future machine learning pipelines while preserving the semantic meaning of the original telemetry data. \paragraph{Feature Selection} A second design objective consists of identifying which information is genuinely relevant for anomaly detection. The original VDA5050 messages contain numerous operational fields related to order execution, navigation state, and protocol management. However, the anomaly detection use case considered in this work focuses on identifying abnormal physical behaviour of AGVs through their telemetry measurements. For this reason, the selected features prioritise vehicle kinematics, battery indicators, motor telemetry, and safety-related signals while excluding protocol-oriented information that does not contribute to the detection of physical anomalies. The selected Silver-layer schema is composed of the following attributes: \begin{itemize} \item \texttt{timestamp}: Event timestamp used for temporal ordering and sequence reconstruction. \item \texttt{manufacturer}: AGV manufacturer identifier. \item \texttt{agv\_id}: Unique AGV identifier. \item \texttt{map\_id}: Identifier of the operational environment. \item \texttt{pos\_x}, \texttt{pos\_y}: Vehicle position coordinates. \item \texttt{vx}, \texttt{vy}, \texttt{omega}: Linear and angular velocity components. \item \texttt{driving}: Vehicle motion state. \item \texttt{battery\_charge}: Remaining battery charge level. \item \texttt{battery\_health}: Battery health indicator. \item \texttt{battery\_voltage}: Battery voltage measurement. \item \texttt{battery\_current}: Battery current measurement. \item \texttt{battery\_temperature}: Battery temperature measurement. \item \texttt{charging}: Battery charging state. \item \texttt{motor\_current}: Motor current consumption. \item \texttt{motor\_voltage}: Motor voltage measurement. \item \texttt{motor\_temperature}: Motor temperature measurement. \item \texttt{motor\_speed\_rad\_s}: Motor rotational speed. \item \texttt{motor\_torque\_nm}: Motor torque. \item \texttt{motor\_power\_w}: Motor power consumption. \item \texttt{wheel\_slip}: Wheel slip ratio. \item \texttt{back\_emf\_v}: Back electromotive force voltage. \item \texttt{fault\_active}: Active fault indicator. \end{itemize} The resulting Silver-layer schema establishes a common analytical representation of AGV telemetry data. This dataset serves as the foundation for subsequent machine learning processes, providing a consistent and domain-oriented view of the physical state of the vehicles while remaining independent of the original VDA5050 message structure.
     \item \textbf{Job 3: Silver to Gold (Distributed Real-Time Anomaly Inference):}
-    To operationalize anomaly detection at scale, the architecture incorporates model inference directly within the distributed streaming topology rather than relying on an isolated single-process inference service. This design decision ensures that inference throughput scales horizontally alongside data partitions as the robot fleet expands. Consuming the structured feature stream from \texttt{fleet-features}, this stage applies pre-trained anomaly detection models across distributed partitions in real time. The resulting diagnostic predictions—comprising anomaly scores, classification flags, and reconstruction metrics—are committed to the Gold Iceberg tier for compliance and historical auditing, while concurrently published to the \texttt{ai-anomalies} topic for immediate ingestion into QuestDB and visualization in Grafana. The specific machine learning models, training procedures, and mathematical architectures are addressed separately in the Machine Learning Layer design.
+    TO DO!
 \end{enumerate}
 
 Figure~\ref{fig:spark-streaming-pipeline} illustrates the end-to-end data flow across the three Spark streaming jobs, detailing the interaction with Redpanda topics and S3 Iceberg tables.
@@ -253,21 +313,58 @@ Figure~\ref{fig:spark-streaming-pipeline} illustrates the end-to-end data flow a
 
 \section{Data Lakehouse Layer: Storage Architecture}
 \label{sec:data-lakehouse-layer}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:data-lakehouse-implementation}.}
 
-To establish the analytical persistence foundation of the platform, the architecture incorporates the \textbf{Data Lakehouse} paradigm. While the event streaming bus (Redpanda) provides transient message buffering and the time-series engine (QuestDB) serves real-time dashboards, an immutable, cost-effective storage tier is required to persist the multi-tier Medallion datasets (Bronze, Silver, and Gold), store streaming execution checkpoints, and serve historical telemetry for offline machine learning model training.
+To establish the analytical persistence foundation of the platform, the architecture incorporates the \textbf{Data Lakehouse} paradigm.
+While the event streaming bus (Redpanda) provides transient message buffering and the time-series engine (QuestDB) serves real-time dashboards, an immutable, cost-effective storage tier is required to persist the multi-tier Medallion datasets (Bronze, Silver, and Gold), store streaming execution checkpoints, and serve historical telemetry for offline machine learning model training.
 
 \subsection{Object Storage Provider Selection: MinIO}
 \label{subsec:minio-provider-selection}
 
-In modern data architectures, decoupling compute from storage is a fundamental design principle. Rather than deploying traditional distributed file systems (such as Apache HDFS) that introduce heavy operational overhead and tight coupling between compute nodes and physical disks, the architecture adopts \textbf{Object Storage} as the core persistence medium.
+In modern data architectures, decoupling compute from storage is a fundamental design principle.
+Rather than deploying traditional distributed file systems (such as Apache HDFS) that introduce heavy operational overhead and tight coupling between compute nodes and physical disks, the architecture adopts \textbf{Object Storage} as the core persistence medium.
 
 During the architectural evaluation of object storage engines for on-premise, edge, and containerized deployment, \textbf{MinIO} was selected based on the following architectural criteria:
 
 \begin{itemize}
-    \item \textbf{Industry-Standard S3 API Compatibility:} MinIO provides complete protocol-level compatibility with the Amazon S3 REST API. This native compatibility allows upstream compute engines—specifically Apache Spark via its \texttt{hadoop-aws} S3A connector—and modern table management engines (Apache Iceberg) to interface with the storage tier using standard S3 client libraries without requiring proprietary adapters.
-    \item \textbf{Hybrid and Edge Deployment Portability:} In industrial cyber-physical environments, telemetry architectures frequently run on local edge infrastructure or on-premise factory servers before synchronizing with corporate data centers. MinIO enables a cloud-native S3 storage layer directly within containerized on-premise environments, ensuring that analytical pipelines can be migrated seamlessly to public cloud object stores (such as AWS S3 or Google Cloud Storage) simply by updating connection endpoints, without modifying data access logic.
-    \item \textbf{High-Throughput Columnar and Micro-Batch Workloads:} Written in Go, MinIO delivers lightweight resource consumption and high sequential read/write throughput. These characteristics are critical for handling the concurrent demands of Apache Spark's streaming checkpoints and continuous Parquet file ingestion.
-    \item \textbf{Strong Consistency for Lakehouse Table Formats:} Modern lakehouse table formats, such as Apache Iceberg, rely on atomic commit guarantees and strong read-after-write consistency to manage metadata snapshots and prevent race conditions during concurrent write operations. MinIO provides immediate consistency for all object operations out of the box, fulfilling this foundational requirement.
+    \item \textbf{Industry-Standard S3 API Compatibility:} MinIO provides complete protocol-level compatibility with the Amazon S3 REST API.
+    This native compatibility allows upstream compute engines—specifically Apache Spark via its \texttt{hadoop-aws} S3A connector—and modern table management engines (Apache Iceberg) to interface with the storage tier using standard S3 client libraries without requiring proprietary adapters.
+
+    \item \textbf{Hybrid and Edge Deployment Portability:} In industrial cyber-physical environments, telemetry architectures frequently run on local edge infrastructure or on-premise factory servers before synchronizing with corporate data centers.
+    MinIO enables a cloud-native S3 storage layer directly within containerized on-premise environments, ensuring that analytical pipelines can be migrated seamlessly to public cloud object stores (such as AWS S3 or Google Cloud Storage) simply by updating connection endpoints, without modifying data access logic.
+
+    \item \textbf{High-Throughput Columnar and Micro-Batch Workloads:} Written in Go, MinIO delivers lightweight resource consumption and high sequential read/write throughput.
+    These characteristics are critical for handling the concurrent demands of Apache Spark's streaming checkpoints and continuous Parquet file ingestion.
+
+    \item \textbf{Strong Consistency for Lakehouse Table Formats:} Modern lakehouse table formats, such as Apache Iceberg, rely on atomic commit guarantees and strong read-after-write consistency to manage metadata snapshots and prevent race conditions during concurrent write operations.
+    MinIO provides immediate consistency for all object operations out of the box, fulfilling this foundational requirement.
+\end{itemize}
+
+\subsection{Table Format Selection: Apache Iceberg}
+\label{subsec:table-format-iceberg}
+
+Object storage engines such as MinIO provide durable byte-level persistence, but relying directly on raw columnar files (for example, bare Apache Parquet) introduces significant limitations in a concurrent streaming environment.
+In particular, raw files offer no transactional guarantees, suffer from the ``small files problem'' under continuous micro-batch appends, and can expose dirty or partial reads when an analytical query overlaps with an ongoing write.
+To overcome these issues, modern Lakehouse architectures interpose an open \textbf{Table Format} layer between the object store and the compute engines, endowing the data lake with database-grade semantics \cite{apache_iceberg}.
+
+The three leading open table formats---\textbf{Apache Hudi}, \textbf{Delta Lake}, and \textbf{Apache Iceberg}---were considered during the design phase.
+\textbf{Apache Iceberg} was selected as the analytical table format of the platform on the basis of the following architectural drivers \cite{okolnychyi2024iceberg}:
+
+\begin{itemize}
+    \item \textbf{Engine-Agnostic, Vendor-Neutral Specification:} Unlike Delta Lake, which has historically been closely associated with the Spark and Databricks ecosystem, Iceberg was designed from its inception as an open, engine-neutral specification.
+    This enables the write path to rely on Spark Structured Streaming while leaving the read path free to use distributed SQL engines, DuckDB, or pure Python tooling (for example, \texttt{pyiceberg}) for offline machine learning, without runtime lock-in.
+
+    \item \textbf{ACID Transactions and Snapshot Isolation:} Iceberg provides serializable isolation through an optimistic concurrency model built on atomic metadata commits.
+    This guarantees that continuous micro-batch ingestion performed by Spark never interferes with the long-running, read-heavy scans issued by offline model-training routines, as readers always observe a consistent table snapshot.
+
+    \item \textbf{Time Travel and Experiment Reproducibility:} Reproducible machine learning requires the ability to reconstruct the exact dataset used to train a given model.
+    Iceberg maintains an immutable history of table snapshots and natively supports time-travel queries against a specific snapshot or timestamp, avoiding manual dataset duplication.
+
+    \item \textbf{Fit for Append-Only Telemetry Workloads:} While Apache Hudi is heavily optimized for Change Data Capture scenarios with frequent record-level updates and deletes, cyber-physical AGV telemetry is strictly append-only.
+    Iceberg offers a leaner metadata layout better suited to high-throughput sequential appends and automated file compaction, without the record-indexing overhead that Hudi introduces.
+
+    \item \textbf{Safe Schema Evolution:} As robotic platforms evolve, their telemetry payloads may add new diagnostic fields or retire obsolete ones.
+    Iceberg supports column addition, renaming, and reordering as a purely metadata-level operation, preserving backward compatibility without rewriting historical Parquet files.
 \end{itemize}
 
 \subsection{Bifurcated Storage Architecture: Operational vs. Analytical Persistence}
@@ -281,3 +378,17 @@ A core architectural decision of the proposed platform is the explicit decouplin
 \end{itemize}
 
 This bifurcated storage design isolates analytical queries and heavy machine learning workloads from live operational monitoring, ensuring that intensive model training scans do not degrade dashboard rendering performance or message ingestion throughput.
+
+\section{Machine Learning layer}
+\label{sec:arch_ml}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:ml_pipeline_implementation}.}
+TO DO!
+
+\section{Observability Layer: Grafana Dashboards}
+\label{sec:arch_observability}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:grafana_implementation}.}
+TO DO!
+
+\section{Security and Access Control Considerations}
+\label{sec:arch_security}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:security_implementation}.}
