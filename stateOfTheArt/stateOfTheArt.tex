@@ -1,24 +1,36 @@
 % !TeX root = ../main.tex
 \chapter{State of the Art}
 \label{chap:state_of_the_art}
-Developing an end-to-end predictive maintenance system for fleets of Autonomous Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs) requires synthesizing research from two core domains: deep learning-based anomaly detection and scalable real-time data engineering. While machine learning algorithms provide the analytical capacity to identify subtle operational degradation in multivariate sensor streams, their practical viability in industrial cyber-physical systems relies entirely on a robust streaming infrastructure capable of ingesting, transforming, and persisting high-frequency telemetry with low latency and transactional reliability \cite{mohna2024medallion, okolnychyi2024iceberg}. This chapter reviews the theoretical foundations and current literature supporting both pillars. Section~\ref{sec:anomaly-taxonomy} examines the taxonomy of deep anomaly detection methodologies, motivating the selection of Gated Recurrent Unit Autoencoders (GRU-AE). Section~\ref{sec:data-pipeline-lakehouse} explores physics-informed synthetic data generation, scalable stream ingestion architectures, event-driven decoupling, the Data Lakehouse paradigm structured via the Medallion architecture, and high-performance time-series persistence for real-time operational monitoring \cite{mohna2024medallion, okolnychyi2024iceberg}.
+
+Developing an end-to-end predictive maintenance system for fleets of Autonomous Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs) requires synthesizing research from two core domains: deep learning-based anomaly detection and scalable real-time data engineering.
+While machine learning algorithms provide the analytical capacity to identify subtle operational degradation in multivariate sensor streams, their practical viability in industrial cyber-physical systems relies entirely on a robust streaming infrastructure capable of ingesting, transforming, and persisting high-frequency telemetry with low latency and transactional reliability \cite{mohna2024medallion, okolnychyi2024iceberg}.
+This chapter reviews the theoretical foundations and current literature supporting both pillars.
+Section~\ref{sec:anomaly-taxonomy} examines the taxonomy of deep anomaly detection methodologies, motivating the selection of Gated Recurrent Unit Autoencoders (GRU-AE).
+Section~\ref{sec:data-pipeline-lakehouse} explores physics-informed synthetic data generation, scalable stream ingestion architectures, event-driven decoupling, the Data Lakehouse paradigm structured via the Medallion architecture, and high-performance time-series persistence for real-time operational monitoring \cite{mohna2024medallion, okolnychyi2024iceberg}.
 
 
 \section{Taxonomy of Anomaly Detection Approaches for Industrial Telemetry}
 \label{sec:anomaly-taxonomy}
 
-Developing a practical anomaly detection engine for AGV and AMR fleets requires a clear understanding of the main design axes that govern algorithmic choice. Rather than adopting a purely representation-learning taxonomy \cite{pang2021deep}, this section organises the literature along three orthogonal dimensions that directly map onto the characteristics of industrial telemetry: (i)~the availability of labelled data (supervised, unsupervised and semi-supervised paradigms), (ii)~the treatment of sensor variables (univariate versus multivariate modelling), and (iii)~the handling of temporal structure (static versus sequential models). This problem-oriented classification provides a more transparent rationale for the methodological decisions taken in the present work.
+Developing a practical anomaly detection engine for AGV and AMR fleets requires a clear understanding of the main design axes that govern algorithmic choice.
+Rather than adopting a purely representation-learning taxonomy \cite{pang2021deep}, this section organises the literature along three orthogonal dimensions that directly map onto the characteristics of industrial telemetry: (i)~the availability of labelled data (supervised, unsupervised and semi-supervised paradigms), (ii)~the treatment of sensor variables (univariate versus multivariate modelling), and (iii)~the handling of temporal structure (static versus sequential models).
+This problem-oriented classification provides a more transparent rationale for the methodological decisions taken in the present work.
 
 \subsection{Supervised, Unsupervised and Semi-supervised Paradigms}
 
 Anomaly detection methods can first be distinguished by the degree of supervision they require.
 
 \begin{itemize}
-    \item \textbf{Supervised approaches} assume the availability of labelled normal and anomalous samples. Classical classifiers (Random Forests, Gradient Boosting, fully-connected or convolutional networks) can then be trained to discriminate the two classes. While highly effective when sufficient labelled faults exist, this setting is rarely realistic in industrial predictive maintenance: true failures are scarce, expensive to annotate, and their statistical distribution drifts over time as equipment ages or operating conditions change.
+    \item \textbf{Supervised approaches} assume the availability of labelled normal and anomalous samples.
+    Classical classifiers (Random Forests, Gradient Boosting, fully-connected or convolutional networks) can then be trained to discriminate the two classes.
+    While highly effective when sufficient labelled faults exist, this setting is rarely realistic in industrial predictive maintenance: true failures are scarce, expensive to annotate, and their statistical distribution drifts over time as equipment ages or operating conditions change.
     
-    \item \textbf{Unsupervised approaches} learn solely from nominal data and flag observations that deviate from the learned normal pattern. Reconstruction-based models (autoencoders), one-class classification methods (Deep SVDD \cite{pmlr-v80-ruff18a}), and density-estimation techniques belong to this family. Because labelled anomalies are unnecessary, unsupervised methods dominate industrial deployments.
+    \item \textbf{Unsupervised approaches} learn solely from nominal data and flag observations that deviate from the learned normal pattern.
+    Reconstruction-based models (autoencoders), one-class classification methods (Deep SVDD \cite{pmlr-v80-ruff18a}), and density-estimation techniques belong to this family.
+    Because labelled anomalies are unnecessary, unsupervised methods dominate industrial deployments.
     
-    \item \textbf{Semi-supervised approaches} occupy an intermediate position: they are trained predominantly on normal data, optionally incorporating a small number of known anomalies when available. Many practical systems fall into this category, as a limited set of historically confirmed faults can be used to refine decision thresholds or to regularise the model.
+    \item \textbf{Semi-supervised approaches} occupy an intermediate position: they are trained predominantly on normal data, optionally incorporating a small number of known anomalies when available.
+    Many practical systems fall into this category, as a limited set of historically confirmed faults can be used to refine decision thresholds or to regularise the model.
 \end{itemize}
 
 In the context of AGV/AMR fleets, the virtual absence of comprehensive labelled failure data makes unsupervised and semi-supervised formulations the only viable options.
@@ -28,9 +40,13 @@ In the context of AGV/AMR fleets, the virtual absence of comprehensive labelled 
 A second fundamental distinction concerns the way sensor channels are treated.
 
 \begin{itemize}
-    \item \textbf{Univariate methods} analyse each telemetry variable independently. Statistical control charts, seasonal-trend decomposition, or per-channel autoencoders are typical examples. These approaches are simple to implement and easy to interpret, yet they ignore cross-variable correlations that often carry the most discriminative information about mechanical or electrical degradation.
+    \item \textbf{Univariate methods} analyse each telemetry variable independently.
+    Statistical control charts, seasonal-trend decomposition, or per-channel autoencoders are typical examples.
+    These approaches are simple to implement and easy to interpret, yet they ignore cross-variable correlations that often carry the most discriminative information about mechanical or electrical degradation.
     
-    \item \textbf{Multivariate methods} explicitly model the joint behaviour of multiple sensors (motor current, voltage, temperature, linear velocity, battery state-of-charge, etc.). By capturing inter-variable dependencies they can detect anomalies that remain invisible when channels are examined in isolation—for instance, an abnormal rise in temperature accompanied by an unexpected drop in current. Representative techniques include multivariate autoencoders, graph neural networks that treat sensors as nodes, and models that learn a joint latent distribution over the whole telemetry vector.
+    \item \textbf{Multivariate methods} explicitly model the joint behaviour of multiple sensors (motor current, voltage, temperature, linear velocity, battery state-of-charge, etc.).
+    By capturing inter-variable dependencies they can detect anomalies that remain invisible when channels are examined in isolation—for instance, an abnormal rise in temperature accompanied by an unexpected drop in current.
+    Representative techniques include multivariate autoencoders, graph neural networks that treat sensors as nodes, and models that learn a joint latent distribution over the whole telemetry vector.
 \end{itemize}
 
 Given that AGV and AMR platforms generate tightly coupled multi-sensor streams, multivariate modelling is essential for high detection sensitivity and for meaningful root-cause attribution.
@@ -40,9 +56,13 @@ Given that AGV and AMR platforms generate tightly coupled multi-sensor streams, 
 The third axis addresses the presence or absence of explicit temporal modelling.
 
 \begin{itemize}
-    \item \textbf{Static (snapshot) models} operate on individual observations or on fixed-size windows treated as independent samples. Classical one-class SVM, Isolation Forest, or feed-forward autoencoders fall into this group. They are computationally light but cannot exploit the sequential dynamics that characterise electromechanical systems.
+    \item \textbf{Static (snapshot) models} operate on individual observations or on fixed-size windows treated as independent samples.
+    Classical one-class SVM, Isolation Forest, or feed-forward autoencoders fall into this group.
+    They are computationally light but cannot exploit the sequential dynamics that characterise electromechanical systems.
     
-    \item \textbf{Temporal (sequential) models} maintain an internal state that evolves over time, thereby capturing short- and medium-term dependencies. Recurrent architectures (LSTM, GRU), temporal convolutional networks, Transformers, and modern state-space models (including Mamba) belong to this family. Because the physical behaviour of motors, batteries and drivetrains is inherently dynamic, temporal models generally outperform static counterparts on industrial telemetry.
+    \item \textbf{Temporal (sequential) models} maintain an internal state that evolves over time, thereby capturing short- and medium-term dependencies.
+    Recurrent architectures (LSTM, GRU), temporal convolutional networks, Transformers, and modern state-space models (including Mamba) belong to this family.
+    Because the physical behaviour of motors, batteries and drivetrains is inherently dynamic, temporal models generally outperform static counterparts on industrial telemetry.
 \end{itemize}
 
 \subsection{Methodological Selection for AGV/AMR Telemetry}
@@ -56,7 +76,8 @@ Evaluating the three dimensions discussed above against the operational constrai
     \item \textbf{Temporal structure}: the continuous evolution of electromechanical states necessitates a sequential architecture with memory.
 \end{itemize}
 
-These three constraints significantly narrow the space of candidate algorithms. Table~\ref{tab:candidate-models} summarises representative models that satisfy all three requirements and have been applied to industrial or multivariate time-series anomaly detection.
+These three constraints significantly narrow the space of candidate algorithms.
+Table~\ref{tab:candidate-models} summarises representative models that satisfy all three requirements and have been applied to industrial or multivariate time-series anomaly detection.
 
 \begin{table}[htbp]
 \centering
@@ -78,7 +99,8 @@ State-Space Models (SSMs) & MambaAD \cite{qin2025mambaad} & Linear-time sequence
 Among these candidates, the \textbf{Gated Recurrent Unit Autoencoder (GRU-AE)} was selected as the primary detection engine for the following reasons:
 
 \begin{itemize}
-    \item \textbf{Accuracy–latency trade-off}: GRU networks retain most of the temporal modelling capacity of LSTMs while using fewer parameters and gates, resulting in faster training and lower inference latency \cite{dey2017gate}. This is critical for continuous execution inside a streaming Silver-layer pipeline.
+    \item \textbf{Accuracy–latency trade-off}: GRU networks retain most of the temporal modelling capacity of LSTMs while using fewer parameters and gates, resulting in faster training and lower inference latency \cite{dey2017gate}.
+    This is critical for continuous execution inside a streaming Silver-layer pipeline.
     
     \item \textbf{Native channel-level explainability}: the reconstruction residual can be decomposed per sensor with negligible extra cost, providing immediate and intuitive root-cause indications for maintenance personnel.
     
@@ -87,26 +109,36 @@ Among these candidates, the \textbf{Gated Recurrent Unit Autoencoder (GRU-AE)} w
     \item \textbf{Implementation and deployment simplicity}: mature libraries, straightforward quantisation possibilities, and easier integration into existing stream-processing frameworks compared with more recent architectures (Transformers or SSMs).
 \end{itemize}
 
-While the GRU-AE constitutes the core operational detector, the framework also contemplates the integration of modern State-Space Models (in particular Mamba-style architectures) as a complementary benchmark. These models offer linear-time complexity with respect to sequence length and improved long-range dependency modelling, which may prove advantageous for longer prediction horizons or more complex degradation patterns. Their evaluation alongside the GRU-AE allows a controlled comparison between a mature, production-ready baseline and a state-of-the-art sequential alternative.
+While the GRU-AE constitutes the core operational detector, the framework also contemplates the integration of modern State-Space Models (in particular Mamba-style architectures) as a complementary benchmark.
+These models offer linear-time complexity with respect to sequence length and improved long-range dependency modelling, which may prove advantageous for longer prediction horizons or more complex degradation patterns.
+Their evaluation alongside the GRU-AE allows a controlled comparison between a mature, production-ready baseline and a state-of-the-art sequential alternative.
+
 \subsection{Architecture of the Gated Recurrent Unit Autoencoder}
 \label{subsec:gru-ae-architecture}
 
-The Gated Recurrent Unit Autoencoder (GRU-AE) combines two complementary ideas: the reconstruction principle of autoencoders and the temporal modelling capacity of recurrent neural networks. This subsection provides a concise explanation of its internal structure.
+The Gated Recurrent Unit Autoencoder (GRU-AE) combines two complementary ideas: the reconstruction principle of autoencoders and the temporal modelling capacity of recurrent neural networks.
+This subsection provides a concise explanation of its internal structure.
 
-An autoencoder is a neural network trained to reconstruct its own input. It consists of two parts:
+An autoencoder is a neural network trained to reconstruct its own input.
+It consists of two parts:
 \begin{itemize}
     \item an \textbf{encoder} that compresses the input into a lower-dimensional latent representation, and
     \item a \textbf{decoder} that attempts to recover the original input from that latent representation.
 \end{itemize}
-When the model is trained exclusively on nominal data, it learns to reconstruct normal patterns with low error. Observations that deviate from these patterns produce high reconstruction error and can therefore be flagged as anomalous.
+When the model is trained exclusively on nominal data, it learns to reconstruct normal patterns with low error.
+Observations that deviate from these patterns produce high reconstruction error and can therefore be flagged as anomalous.
 
-Because industrial telemetry is sequential, the encoder and decoder are implemented with Gated Recurrent Units (GRUs) rather than feed-forward layers. A GRU maintains an internal hidden state that evolves over time, allowing the network to capture short- and medium-term temporal dependencies. 
+Because industrial telemetry is sequential, the encoder and decoder are implemented with Gated Recurrent Units (GRUs) rather than feed-forward layers.
+A GRU maintains an internal hidden state that evolves over time, allowing the network to capture short- and medium-term temporal dependencies.
 
-Figure~\ref{fig:gru-ae-architecture} illustrates the overall architecture and Figure \ref{fig:gru-unit-structure} the unit GRU structure. A multivariate telemetry window
+Figure~\ref{fig:gru-ae-architecture} illustrates the overall architecture and Figure \ref{fig:gru-unit-structure} the unit GRU structure.
+A multivariate telemetry window
 \[
 \mathbf{X}_t = \bigl(\mathbf{x}_{t-T+1}, \dots, \mathbf{x}_t\bigr)^{\top} \in \mathbb{R}^{T \times M}
 \]
-is fed to the encoder GRU, which processes the sequence step by step and produces a latent representation. The decoder GRU then reconstructs the window, yielding \(\hat{\mathbf{X}}_t\). The difference between the original and reconstructed signals forms the basis for anomaly scoring (detailed in the next subsection).
+is fed to the encoder GRU, which processes the sequence step by step and produces a latent representation.
+The decoder GRU then reconstructs the window, yielding \(\hat{\mathbf{X}}_t\).
+The difference between the original and reconstructed signals forms the basis for anomaly scoring (detailed in the next subsection).
 
 \begin{figure}[htbp]
     \centering
@@ -117,6 +149,7 @@ is fed to the encoder GRU, which processes the sequence step by step and produce
     \caption{Schematic architecture of the Gated Recurrent Unit Autoencoder (GRU-AE). A multivariate telemetry window is encoded by a GRU into a latent representation and subsequently reconstructed by a second GRU. The reconstruction residual is used for anomaly detection and channel-level attribution.}
     \label{fig:gru-ae-architecture}
 \end{figure}
+
 \begin{figure}[htbp]
     \centering
     % Placeholder: insert architecture diagram here
@@ -128,12 +161,16 @@ is fed to the encoder GRU, which processes the sequence step by step and produce
 \end{figure}
 
 This design offers a favourable balance between temporal modelling power, computational efficiency and interpretability, making it well suited for real-time deployment inside a streaming data pipeline.
+
 \subsection{Root-Cause Analysis and Explainability in Cyber-Physical Telemetry}
 \label{subsec:rca-xai}
 
-While deep autoencoding architectures effectively identify temporal deviations in high-dimensional telemetry, a scalar anomaly score alone offers limited operational value to maintenance technicians \cite{su2019omnianomaly, shen2021interfusion}. In industrial predictive maintenance, detection must be accompanied by Root-Cause Analysis (RCA) mechanisms that help isolate the most affected subsystems.
+While deep autoencoding architectures effectively identify temporal deviations in high-dimensional telemetry, a scalar anomaly score alone offers limited operational value to maintenance technicians \cite{su2019omnianomaly, shen2021interfusion}.
+In industrial predictive maintenance, detection must be accompanied by Root-Cause Analysis (RCA) mechanisms that help isolate the most affected subsystems.
 
-Reconstruction-based models address this need through channel-level residual decomposition. Let $\mathbf{x}_t = (x_{t,1}, \dots, x_{t,M})^{\top} \in \mathbb{R}^{M}$ denote the telemetry vector at time $t$ and $\hat{\mathbf{x}}_t$ its reconstruction. The per-channel reconstruction error is defined as
+Reconstruction-based models address this need through channel-level residual decomposition.
+Let $\mathbf{x}_t = (x_{t,1}, \dots, x_{t,M})^{\top} \in \mathbb{R}^{M}$ denote the telemetry vector at time $t$ and $\hat{\mathbf{x}}_t$ its reconstruction.
+The per-channel reconstruction error is defined as
 \begin{equation}
     e_{t,m} = \bigl(x_{t,m} - \hat{x}_{t,m}\bigr)^{2}, \qquad m = 1, \dots, M,
     \label{eq:channel_residual_error}
@@ -149,51 +186,82 @@ An observation is declared anomalous when the total residual exceeds a threshold
     \label{eq:anomaly_indicator}
 \end{equation}
 
-By ranking the individual contributions $e_{t,m}$, the system provides immediate variable-level attribution. For example, simultaneous elevations in motor temperature and current residuals typically indicate electromechanical friction or overload, whereas an isolated deviation in battery state-of-charge points toward cell degradation. Mapping these residual signatures to domain-specific rules converts the continuous model outputs into actionable diagnostic labels.
+By ranking the individual contributions $e_{t,m}$, the system provides immediate variable-level attribution.
+For example, simultaneous elevations in motor temperature and current residuals typically indicate electromechanical friction or overload, whereas an isolated deviation in battery state-of-charge points toward cell degradation.
+Mapping these residual signatures to domain-specific rules converts the continuous model outputs into actionable diagnostic labels.
 
-It should be noted that residual decomposition yields a form of local attribution rather than a full causal analysis. In complex multi-fault scenarios, complementary techniques may be required; nevertheless, channel-wise residuals remain one of the most practical and computationally efficient explainability mechanisms available for real-time industrial telemetry.
+It should be noted that residual decomposition yields a form of local attribution rather than a full causal analysis.
+In complex multi-fault scenarios, complementary techniques may be required; nevertheless, channel-wise residuals remain one of the most practical and computationally efficient explainability mechanisms available for real-time industrial telemetry.
 
 \section{Scalable Real-Time Telemetry Pipelines and Data Lakehouse Architecture}
-The implementation of modern data architectures in industrial mobile robotics requires an end-to-end approach spanning from high-speed telemetry generation and ingestion to low-cost analytical storage and real-time operational exposure. This section examines the state of the art in scalable data pipeline design, evaluating the transition from physics-informed digital twin data generation to structured storage via the Data Lakehouse paradigm and high-availability time-series databases.
 \label{sec:data-pipeline-lakehouse}
+
+The implementation of modern data architectures in industrial mobile robotics requires an end-to-end approach spanning from high-speed telemetry generation and ingestion to low-cost analytical storage and real-time operational exposure.
+This section examines the state of the art in scalable data pipeline design, evaluating the transition from physics-informed digital twin data generation to structured storage via the Data Lakehouse paradigm and high-availability time-series databases.
 
 \subsection{Physics-Informed Synthetic Telemetry and Digital Twin Emulation}
 \label{sec:physics_informed_telemetry}
 
-The limited availability of real-world operational data and failure records is a major challenge when developing machine learning pipelines for industrial mobile robotics. Physics-informed Digital Twins and synthetic telemetry generators can help address this limitation by providing representative data for training and evaluating anomaly detection models \cite{mccourt2024digital,esrel2025fault}.
+The limited availability of real-world operational data and failure records is a major challenge when developing machine learning pipelines for industrial mobile robotics.
+Physics-informed Digital Twins and synthetic telemetry generators can help address this limitation by providing representative data for training and evaluating anomaly detection models \cite{mccourt2024digital,esrel2025fault}.
 
-At the communication layer, the open-source Rust-based \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050} provides a means of emulating VDA 5050 communication traffic. Such infrastructure can facilitate reproducible testing of telemetry ingestion pipelines and anomaly detection models under different operational scenarios and simulated fault conditions.
+At the communication layer, the open-source Rust-based \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050} provides a means of emulating VDA 5050 communication traffic.
+Such infrastructure can facilitate reproducible testing of telemetry ingestion pipelines and anomaly detection models under different operational scenarios and simulated fault conditions.
 
 \subsection{Domain Adaptation and Transfer Learning}
 \label{sec:domain_adaptation}
 
-Despite the benefits of synthetic telemetry, models trained exclusively on simulated data may experience performance degradation when deployed on physical robots due to the \textit{sim-to-real domain gap}, which arises from differences in sensor noise, vehicle dynamics, and operating conditions. Combining synthetic and real-world data can help improve model performance under certain conditions \cite{sensors2024synthetic}.
+Despite the benefits of synthetic telemetry, models trained exclusively on simulated data may experience performance degradation when deployed on physical robots due to the \textit{sim-to-real domain gap}, which arises from differences in sensor noise, vehicle dynamics, and operating conditions.
+Combining synthetic and real-world data can help improve model performance under certain conditions \cite{sensors2024synthetic}.
 
-Several techniques could mitigate this gap, including fine-tuning a pretrained GRU autoencoder on real-world telemetry, recalibrating reconstruction error thresholds, and applying domain adaptation methods such as Domain-Adversarial Neural Networks (DANN) \cite{wang2023}. These approaches could help adapt learned temporal representations to real industrial environments while reducing the amount of labeled real-world data required.
+Several techniques could mitigate this gap, including fine-tuning a pretrained GRU autoencoder on real-world telemetry, recalibrating reconstruction error thresholds, and applying domain adaptation methods such as Domain-Adversarial Neural Networks (DANN) \cite{wang2023}.
+These approaches could help adapt learned temporal representations to real industrial environments while reducing the amount of labeled real-world data required.
 
-Due to time and computational hardware limitations, these techniques are not implemented or experimentally evaluated in this project. Instead, they are discussed as potential directions for future work towards deploying the proposed anomaly detection system in real-world industrial environments.
-
+Due to time and computational hardware limitations, these techniques are not implemented or experimentally evaluated in this project.
+Instead, they are discussed as potential directions for future work towards deploying the proposed anomaly detection system in real-world industrial environments.
 
 \subsection{Real-Time Stream Ingestion and Decoupled Messaging Layer}
 
-To manage the continuous telemetry streams emitted by industrial AGVs, modern cyber-physical infrastructures decouple data ingestion from analytical processing using event-driven broker architectures. Protocols such as VDA 5050 standardize state and order exchanges via Message Queuing Telemetry Transport (MQTT) over wireless networks \cite{vda5050standard, franke2023vda}. As fleet sizes increase and robots transmit telemetry at frequent intervals, the resulting volume of concurrent messages requires scalable streaming infrastructures capable of handling high data rates, backpressure, and bursty traffic.
+To manage the continuous telemetry streams emitted by industrial AGVs, modern cyber-physical infrastructures decouple data ingestion from analytical processing using event-driven broker architectures.
+Protocols such as VDA 5050 standardize state and order exchanges via Message Queuing Telemetry Transport (MQTT) over wireless networks \cite{vda5050standard, franke2023vda}.
+As fleet sizes increase and robots transmit telemetry at frequent intervals, the resulting volume of concurrent messages requires scalable streaming infrastructures capable of handling high data rates, backpressure, and bursty traffic.
 
-Distributed stream-processing engines (e.g., Apache Spark Structured Streaming) can ingest raw MQTT payloads, perform schema validation, append ingestion metadata, and cleanse malformed records in near real-time. The processed stream is then published to high-performance event brokers (e.g., Redpanda or Apache Kafka), establishing a publish-subscribe boundary that isolates edge telemetry generation from downstream machine learning consumers and storage engines.
+Distributed stream-processing engines (e.g., Apache Spark Structured Streaming) can ingest raw MQTT payloads, perform schema validation, append ingestion metadata, and cleanse malformed records in near real-time.
+The processed stream is then published to high-performance event brokers (e.g., Redpanda or Apache Kafka), establishing a publish-subscribe boundary that isolates edge telemetry generation from downstream machine learning consumers and storage engines.
 
-\subsection{The Data Lakehouse Paradigm and Medallion Storage Model}To provide structured, highly performant access to historical telemetry without incurring the costs of proprietary data warehouses, the system adopts a \textbf{Data Lakehouse} paradigm. This hybrid model superimposes DBMS-like ACID transactions, schema enforcement, and versioning over low-cost object repositories (S3-compatible storage). Data persistence is structured according to the \textbf{Medallion Architecture}, which organizes data into progressive refinement tiers \cite{mohna2024medallion, okolnychyi2024iceberg}:
+\subsection{The Data Lakehouse Paradigm and Medallion Storage Model}
+
+To provide structured, highly performant access to historical telemetry without incurring the costs of proprietary data warehouses, the system adopts a \textbf{Data Lakehouse} paradigm.
+This hybrid model superimposes DBMS-like ACID transactions, schema enforcement, and versioning over low-cost object repositories (S3-compatible storage).
+Data persistence is structured according to the \textbf{Medallion Architecture}, which organizes data into progressive refinement tiers \cite{mohna2024medallion, okolnychyi2024iceberg}:
+
 \begin{enumerate}
-\item \textbf{Bronze Layer (Raw Telemetry Ingestion):} Acts as an append-only, immutable landing zone. Incoming raw JSON payloads from the broker layer are persisted in their original format to preserve an auditable lineage of historic signals.
-\item \textbf{Silver Layer (Cleaned and Enriched Data):} Stores validated, deduplicated, and schema-enforced events. Signals are converted into columnar formats (e.g., Apache Parquet) managed by open table formats like \textbf{Apache Iceberg}. This layer serves as the primary feature source for downstream deep learning models (e.g., GRU-Autoencoders).
-\item \textbf{Gold Layer (Business Aggregations and Diagnostic Outputs):} Holds aggregated operational metrics, statistical summaries, and model outputs—such as reconstruction error scores and mapped diagnostic fault labels—enabling performant analytical queries.
-\end{enumerate}
+    \item \textbf{Bronze Layer (Raw Telemetry Ingestion):}
+    Acts as an append-only, immutable landing zone.
+    Incoming raw JSON payloads from the broker layer are persisted in their original format to preserve an auditable lineage of historic signals.
 
+    \item \textbf{Silver Layer (Cleaned and Enriched Data):}
+    Stores validated, deduplicated, and schema-enforced events.
+    Signals are converted into columnar formats (e.g., Apache Parquet) managed by open table formats like \textbf{Apache Iceberg}.
+    This layer serves as the primary feature source for downstream deep learning models (e.g., GRU-Autoencoders).
+
+    \item \textbf{Gold Layer (Business Aggregations and Diagnostic Outputs):}
+    Holds aggregated operational metrics, statistical summaries, and model outputs—such as reconstruction error scores and mapped diagnostic fault labels—enabling performant analytical queries.
+\end{enumerate}
 
 \subsection{Transactional Table Management and Partitioning with Apache Iceberg}
 
-In a Data Lakehouse architecture, managing growing telemetry datasets requires consistent table updates and efficient data organization. Apache Iceberg addresses these requirements through snapshot-based table management and flexible partitioning \cite{okolnychyi2024iceberg}.
+In a Data Lakehouse architecture, managing growing telemetry datasets requires consistent table updates and efficient data organization.
+Apache Iceberg addresses these requirements through snapshot-based table management and flexible partitioning \cite{okolnychyi2024iceberg}.
 
-Snapshots provide a consistent view of a table at a given point in time, allowing analytical queries to access committed data while new updates are being written. This is particularly relevant for telemetry pipelines in which data ingestion and downstream analytical processing operate concurrently.
+Snapshots provide a consistent view of a table at a given point in time, allowing analytical queries to access committed data while new updates are being written.
+This is particularly relevant for telemetry pipelines in which data ingestion and downstream analytical processing operate concurrently.
 
-Furthermore, Iceberg supports hidden partitioning and partition evolution, allowing tables to be organized according to relevant attributes, such as event timestamps, while adapting the partitioning strategy as data volumes and query patterns change. These capabilities can improve query efficiency and reduce the need for disruptive changes to the physical data layout \cite{icebergIncremental2026}.
+Furthermore, Iceberg supports hidden partitioning and partition evolution, allowing tables to be organized according to relevant attributes, such as event timestamps, while adapting the partitioning strategy as data volumes and query patterns change.
+These capabilities can improve query efficiency and reduce the need for disruptive changes to the physical data layout \cite{icebergIncremental2026}.
 
-\subsection{High-Performance Time-Series Persistence and Operational Serving Layers}While Data Lakehouses provide cost-effective long-term persistence and batch analytics, operational decision-making demands sub-second latency for live dashboarding and alerting \cite{mohna2024medallion}. Consequently, live predictions and decomposed anomaly scores are mirrored into high-performance time-series databases (e.g., QuestDB). Optimized for column-oriented time-series indexing, QuestDB enables real-time SQL querying for operational dashboards (e.g., Grafana), completing the pipeline from continuous stream ingestion to human-interpretable predictive maintenance alerts.
+\subsection{High-Performance Time-Series Persistence and Operational Serving Layers}
+
+While Data Lakehouses provide cost-effective long-term persistence and batch analytics, operational decision-making demands sub-second latency for live dashboarding and alerting \cite{mohna2024medallion}.
+Consequently, live predictions and decomposed anomaly scores are mirrored into high-performance time-series databases (e.g., QuestDB).
+Optimized for column-oriented time-series indexing, QuestDB enables real-time SQL querying for operational dashboards (e.g., Grafana), completing the pipeline from continuous stream ingestion to human-interpretable predictive maintenance alerts.
