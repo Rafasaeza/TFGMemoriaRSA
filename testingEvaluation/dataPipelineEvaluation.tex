@@ -1,0 +1,158 @@
+% !TeX root = ../main.tex
+\providecolor{primary}{RGB}{24, 76, 120}
+\providecolor{secondary}{RGB}{198, 40, 40}
+\providecolor{accentgreen}{RGB}{46, 125, 50}
+\providecolor{darkgray}{RGB}{60, 60, 60}
+
+This evaluation assesses the operational resilience, throughput stability, and resource consumption of the end-to-end telemetry streaming pipeline under continuous real-time load. The evaluation campaign is structured over a two-day testing methodology: an automated monitoring script runs in the background capturing container runtime statistics (\texttt{docker stats}) across all stack services throughout the entire night, and the captured traces are subsequently analyzed quantitatively the following morning.
+
+The evaluation is structured into two consecutive phases:
+\begin{enumerate}
+    \item \textbf{Day 1 (Nov 9--10, 2026):} Baseline soak test, problem discovery, and pipeline hardening.
+    \item \textbf{Day 2 (Nov 10--11, 2026):} Post-remediation soak validation.
+\end{enumerate}
+
+%======================================================================
+\subsection{Day 1: Baseline Soak Test, Problem Discovery, and Hardening}
+\label{subsec:eval_day1}
+
+\paragraph{Objective.}
+The objective of this first soak test is to detect potential memory leaks, identify streaming lags, and verify whether the end-to-end system is fit for continuous real-time streaming without freezes, operational stoppages, or queue backpressure.
+
+\paragraph{Evaluation Findings.}
+The baseline execution ran continuously for 14.30 hours (from 2026-11-09 18:31:02 UTC to 2026-11-10 08:48:49 UTC), recording $N = 1,641$ discrete \texttt{docker stats} metric snapshots sampled at 30-second intervals. Over this duration, all containerized services remained fully operational with zero crashes, restarts, or unhandled exceptions. Ingested data integrity was verified at the storage sinks: exactly 233,412 rows were persisted into QuestDB (\texttt{fleet\_features}) with uninterrupted timestamps, and the Apache Spark Structured Streaming engines maintained strict zero-lag real-time parity with Redpanda ($\text{avgOffsetsBehindLatest} = 0.0$, $\text{maxOffsetsBehindLatest} = 0$).
+
+Table~\ref{tab:pipeline_perf_metrics} summarizes the resource utilization and memory drift recorded for every subsystem across the 14.3-hour baseline execution.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Container Resource Utilization and Memory Drift (14.3-Hour Soak Test)}
+\label{tab:pipeline_perf_metrics}
+\vspace{0.2cm}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l r r r r r r r l}
+\toprule
+\textbf{Service / Container} & \textbf{CPU$_{\text{avg}}$} & \textbf{CPU$_{\text{max}}$} & \textbf{MEM$_{\text{avg}}$} & \textbf{MEM$_{\text{max}}$} & \textbf{MEM$_{\text{Start}}$} & \textbf{MEM$_{\text{End}}$} & \textbf{$\Delta$ MEM} & \textbf{Observed Trend} \\
+\midrule
+\texttt{spark-fleet-features}     & 24.3\% & 131.9\% & 2.1 GiB & 3.1 GiB & 2.9 GiB & 1.7 GiB & -1.2 GiB & Stabilized (GC) \\
+\texttt{spark-vda5050-state}      &  2.5\% &  48.5\% & 1.6 GiB & 2.1 GiB & 2.1 GiB & 1.3 GiB & -767 MiB & Stabilized (GC) \\
+\texttt{questdb}                  & 12.8\% &  27.2\% & 569 MiB & 741 MiB & 711 MiB & 425 MiB & -287 MiB & Decreased (Stable) \\
+\texttt{redpanda}                 &  1.3\% &   9.1\% & 1.8 GiB & 2.1 GiB & 1.9 GiB & 1.4 GiB & -515 MiB & Stabilized \\
+\texttt{minio}                    &  5.8\% &  33.2\% & 1.2 GiB & 2.1 GiB & 400 MiB & 2.0 GiB & \textbf{+1.6 GiB} & \textbf{+406\% (Metadata Cache)} \\
+\texttt{questdb-kafka-connect}    &  0.9\% &  15.2\% & 581 MiB & 939 MiB & 616 MiB & 476 MiB & -141 MiB & Stabilized \\
+\texttt{grafana}                  &  0.6\% &   6.3\% & 150 MiB & 173 MiB & 150 MiB & 148 MiB &   -1 MiB & Flat \\
+\texttt{simulator} (Rust AGV)     &  0.5\% &   1.1\% & 6.1 MiB & 6.7 MiB & 4.2 MiB & 6.3 MiB &   +2 MiB & Negligible (Flat) \\
+\texttt{telegraf}                 &  0.2\% &   1.5\% &  60 MiB & 107 MiB &  72 MiB &  44 MiB &  -28 MiB & Stabilized \\
+\texttt{mosquitto}                &  0.5\% &   5.9\% & 6.9 MiB &  12 MiB & 7.9 MiB & 6.4 MiB &   -1 MiB & Flat \\
+\texttt{sim-control-panel}        &  0.1\% &   0.2\% &  27 MiB &  28 MiB &  25 MiB &  26 MiB &   +1 MiB & Flat \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+As reflected in the data, all core processing components behaved strictly as expected:
+\begin{itemize}
+    \item The native Rust simulator operated with a flat footprint ($\sim6$~MiB), demonstrating that strict ownership and compile-time memory management prevent leaks entirely.
+    \item The Apache Spark Structured Streaming engines operated as stateless transformers; after initial JVM heap warming (2.9~GiB), G1GC garbage collection stabilized memory at 1.7~GiB and 1.3~GiB without unbounded window growth.
+    \item Redpanda and QuestDB exhibited downward stabilization, releasing temporary startup buffers and settling into steady off-heap memory footprints.
+\end{itemize}
+
+However, \textbf{MinIO S3 object storage exhibited an anomalous behavior}: its resident memory grew monotonically from 400~MiB up to 2.07~GiB (+406\%), diverging sharply from all other services. Figure~\ref{fig:pipeline_memory_drift} illustrates this comparative memory progression over the 14.3-hour window.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    title={\textbf{Memory Utilization Over 14.3 Hours Across Core Subsystems}},
+    xlabel={Execution Time (Hours)},
+    ylabel={RAM Consumption (GiB)},
+    xmin=0, xmax=14,
+    ymin=0, ymax=3.5,
+    width=0.92\textwidth,
+    height=6.2cm,
+    grid=both,
+    grid style={line width=.1pt, draw=gray!20},
+    legend style={at={(0.98,0.95)}, anchor=north east, font=\scriptsize},
+    thick
+]
+    % Spark Fleet Features
+    \addplot[color=primary, mark=square*] coordinates {
+        (0, 2.31) (2, 2.56) (4, 2.22) (6, 2.07) (8, 1.93) (10, 1.79) (12, 1.70) (14, 1.65)
+    };
+    \addlegendentry{Spark Fleet Features (Stateless JVM)}
+
+    % MinIO (Object Storage)
+    \addplot[color=secondary, mark=triangle*] coordinates {
+        (0, 0.19) (2, 0.59) (4, 0.86) (6, 1.10) (8, 1.37) (10, 1.53) (12, 1.78) (14, 2.07)
+    };
+    \addlegendentry{MinIO S3 (Metadata Index Drift)}
+
+    % Redpanda
+    \addplot[color=accentgreen, mark=diamond*] coordinates {
+        (0, 1.90) (2, 1.97) (4, 2.02) (6, 2.02) (8, 1.86) (10, 1.65) (12, 1.48) (14, 1.41)
+    };
+    \addlegendentry{Redpanda Kafka (Seastar Thread-Pool)}
+
+    % QuestDB
+    \addplot[color=orange, mark=circle*] coordinates {
+        (0, 0.69) (2, 0.60) (4, 0.60) (6, 0.60) (8, 0.56) (10, 0.50) (12, 0.44) (14, 0.42)
+    };
+    \addlegendentry{QuestDB (Zero-GC Columnar Engine)}
+\end{axis}
+\end{tikzpicture}
+\caption{Evolution of memory footprint over the 14.3-hour soak test. While Spark, Redpanda, and QuestDB stabilized, MinIO exhibited monotonic growth due to accumulating Iceberg metadata indices.}
+\label{fig:pipeline_memory_drift}
+\end{figure}
+
+\paragraph{Root Cause Analysis: Unbounded Metadata Growth.}
+Detailed inspection of the MinIO object store revealed that the disk space consumption had reached 128~GiB, despite the actual persisted Parquet telemetry data totaling only 321~MB. The remaining 127.5~GiB (99.7\% of the entire bucket) consisted of over 61,000 Apache Iceberg metadata JSON files.
+
+Because Apache Iceberg commits a new metadata file ($v_N\text{.metadata.json}$) with each streaming micro-batch, and by default appends the complete historical snapshot log to every new version file, the size of individual metadata files escalated progressively throughout the run:
+\begin{itemize}
+    \item Early version ($v_1$): 12~KB.
+    \item Intermediate version ($v_{1000}$): 872~KB.
+    \item Mid-test version ($v_{10000}$): 8.3~MB.
+    \item End-of-night version ($v_{17650}$): 15.0~MB.
+\end{itemize}
+
+With micro-batches executing every 3 seconds, Spark was serializing and transmitting a 15~MB JSON file to MinIO every 3 seconds. This caused quadratic storage growth ($O(N^2)$), inflated Spark commit latency from 180~ms to 3--5~seconds, and forced the MinIO daemon to retain massive inode and bloom filter structures in RAM, causing the observed memory drift.
+
+\paragraph{Remediation and Storage Optimization.}
+To eliminate unbounded metadata accumulation at the engine level, two critical table properties were injected into the Iceberg DDL schemas for both Bronze and Silver tables:
+\begin{enumerate}
+    \item \texttt{'write.metadata.delete-after-commit.enabled' = 'true'}: Instructs Spark to automatically purge obsolete metadata files synchronously upon committing new snapshots.
+    \item \texttt{'write.metadata.previous-versions-max' = '5'}: Restricts the retained metadata history to the 5 most recent version files, bounding metadata file size permanently.
+\end{enumerate}
+
+Combined with an administrative purge of historical orphan metadata files and clearance of internal MinIO trash, this configuration achieved a \textbf{99.9\% reduction} in storage and stabilized commit latency, as shown in Table~\ref{tab:pipeline_remediation}.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{System Metrics Before vs. After Metadata Hardening}
+\label{tab:pipeline_remediation}
+\vspace{0.2cm}
+\begin{tabular}{l r r r}
+\toprule
+\textbf{Metric} & \textbf{Pre-Hardening (Morning)} & \textbf{Post-Hardening} & \textbf{Improvement} \\
+\midrule
+Total Lakehouse S3 Storage & 128.0 GiB & \textbf{36.0 MiB} & \textbf{-99.97\%} \\
+Silver Table Metadata Size & 122.5 GiB & \textbf{26.0 MiB} & -99.98\% \\
+Bronze Table Metadata Size &   5.0 GiB &  \textbf{1.7 MiB} & -99.96\% \\
+Per-Commit Metadata JSON   &  15.0 MiB &  \textbf{8.7 KiB} & -99.94\% \\
+Retained Metadata Files    & 17,654 versions & \textbf{5 versions} & Bound \& Static \\
+Spark Iceberg Commit Time  & 2.5s -- 5.0s & \textbf{0.18s} & \textbf{15$\times$ Faster} \\
+MinIO Filesystem Usage     & 15.1\% (145 GiB) & \textbf{1.7\% (17 GiB)} & Reclaimed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Conclusions of Day 1.}
+As seen in the first day of the test, the system can seem real time prepared, but many factors as the metadata size were not taken into account; through this first test, the problem was solved.
+
+%======================================================================
+\subsection{Day 2: 24-Hour Post-Remediation Soak Validation}
+\label{subsec:eval_day2}
+
+\textbf{TO DO}
