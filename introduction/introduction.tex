@@ -5,12 +5,32 @@
 \section{Motivation}
 Industry 4.0 is no longer just a concept, but a reality transforming factories worldwide. 
 The arrival of these emerging technologies opens up vast opportunities to optimize production processes, shifting the focus from mere automation toward creating truly intelligent factories.
+A key enabler of Industry 4.0 is the deployment of Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs).
 
-A key enabler of Industry 4.0 is the deployment of Automated Guided Vehicles (AGVs) and Autonomous Mobile Robots (AMRs), which are capable of navigating autonomously through factories, warehouses, and complex environments. 
+\textbf{AGVs} are driverless vehicles used to automate material transportation in warehouses and manufacturing facilities. 
+They follow predefined routes using physical or digital guidance systems such as magnetic tapes, embedded wires, floor markings, QR codes, or laser reflectors. 
+Common industrial tasks performed by AGVs include: 
+\begin{itemize} 
+    \item Supplying raw materials to production lines. 
+    \item Transporting semi-finished products between workstations. 
+    \item Delivering finished goods to warehouse storage areas. 
+    \item Supporting pallet handling and warehouse logistics. 
+\end{itemize} 
 
-Their adoption across industries continues to surge, with market research pointing to sustained, strong growth in the coming years \cite{imarc2026agv}.\\
+\textbf{AMRs} represent a more advanced class of driverless vehicles. 
+They navigate dynamically using onboard sensors and technologies such as cameras, LiDAR, and SLAM (Simultaneous Localization and Mapping), allowing them to adapt their routes according to changing environmental conditions without requiring physical floor infrastructure. 
+Common production applications include: 
+\begin{itemize} 
+    \item Autonomous material delivery between production cells. 
+    \item Just-in-time supply of components to assembly stations. 
+    \item Flexible transport of tools, fixtures, and kitting carts. 
+    \item Internal logistics in facilities with frequently changing layouts. 
+    \item Collaborative transportation tasks alongside human operators. 
+\end{itemize}
 
-\begin{figure}[ht]
+As seen in Figure~\ref{fig:agv-market-forecast}, their adoption across industries continues to surge, with market research pointing to sustained, strong growth in the coming years \cite{imarc2026agv}.
+
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=.85\linewidth]{marquetForecastAgv.png}
   \caption{Global AGV market forecast (2025--2034). Source: IMARC Group~\cite{imarc2026agv}.}
@@ -21,7 +41,10 @@ Because these vehicles play a vital role in production, any failure can paralyze
 Studies reveal that unexpected downtime can range from \$36,000 per hour in fast-moving consumer goods to upwards of \$2.3 million per hour in the automotive sector \cite{siemens2024Cost}. 
 Consequently, preventing such disruptions is not merely an operational challenge, but a critical financial priority for modern manufacturers.
 
-A promising solution to this challenge is predictive maintenance using machine learning, which can significantly reduce vehicle failures and the associated costs of unplanned downtime. 
+A promising solution to this challenge is predictive maintenance (PdM) using machine learning. 
+Unlike reactive maintenance (repairing equipment post-breakdown) or scheduled preventive maintenance (servicing assets at arbitrary calendar intervals), predictive maintenance leverages continuous condition monitoring (CM) and operational sensor telemetry to forecast impending asset failures. 
+By anticipating faults before they manifest, this approach can significantly reduce vehicle failures and the associated costs of unplanned downtime. 
+
 The literature on machine learning for anomaly detection is extensive, however, a significant gap remains between theoretical studies and real-world implementation, as researchers encounter major hurdles when scaling proposed solutions to production environments \cite{paleyes2022challenges}.
 
 Through a review of this literature, four key limitations emerge as critical factors when developing a real-time anomaly detection system for AGVs and AMRs \cite{benecki2024agv}:
@@ -36,7 +59,8 @@ Through a review of this literature, four key limitations emerge as critical fac
 To complement the core challenges identified in the literature, an additional constraint must be considered in this work: the total lack of labeled historical error data, which precludes the use of supervised learning approaches.\\
 
 \section{Objectives}
-As demonstrated in the previous section, AGVs and AMRs are fully integrated into Industry 4.0 processes. While they drive automation across the production line, their critical role implies that any asset failure can lead to a complete halt in production. Furthermore, although numerous studies validate the effectiveness of machine learning for anomaly detection, translating these approaches into real-world production environments presents significant technical limitations.
+As demonstrated in the previous section, AGVs and AMRs are fully integrated into Industry 4.0 processes. While they drive automation across the production line, their critical role implies that any asset failure can lead to a complete halt in production.
+However, while numerous studies validate the effectiveness of machine learning for anomaly detection, translating these approaches into real-world production environments presents significant technical limitations.
 
 To address these challenges, this project aims to design and implement a fully decoupled, end-to-end architecture for real-time anomaly detection. Broadly speaking, the proposed pipeline encompasses the entire data lifecycle: from simulated AGV telemetry generation, real-time data ingestion, processing, and persistence, to unsupervised machine learning anomaly detection and interactive visualization of diagnostic metrics.
 
@@ -69,6 +93,7 @@ This multi-layered approach not only supports live monitoring, but through the M
 This project is carried out in collaboration with EDAG Engineering Group. 
 As an international engineering service provider for the automotive and manufacturing industries, EDAG actively develops cutting-edge Industry 4.0 solutions. 
 Developing this project during an internship at EDAG provides direct insight into real-world industrial environments, system requirements, and deployment constraints. 
+%Review: Dazu würde ich noch mehr schreiben. Kann dir die Infos dazu aber auch nicht liefern%
 Specifically, this work contributes to the \textbf{Metys} project \cite{edagMetys}, an initiative aimed at optimizing software development and smart production workflows.
 
 \section{Scope and Limitations}
