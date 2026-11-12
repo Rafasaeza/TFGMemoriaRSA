@@ -3,7 +3,41 @@
 \label{chap:testing_evaluation}
 
 \section{Introduction}
-To do
+
+This chapter evaluates the functional fidelity, operational resilience, and throughput performance of the proposed predictive maintenance and anomaly detection platform. The evaluation assesses both the physical accuracy of the generated telemetry and the stability of the distributed streaming lakehouse under sustained, real-time industrial workloads. \textit{(To complete: additional evaluation sections and machine learning validation procedures will be incorporated as the platform matures.)}
+
+\paragraph{Experimental Test Environment and Reproducibility.}
+To guarantee strict environment parity, reproducibility, and process isolation, the entire data platform is deployed as a containerized stack orchestrated via Docker Compose. Every functional component---including the native Rust-based vehicle simulator, the Eclipse Mosquitto MQTT broker, the Telegraf ingestion bridge, the Redpanda distributed streaming backbone, the Apache Spark Structured Streaming engines, the Apache Iceberg lakehouse on MinIO S3, the QuestDB time-series database, and the Grafana visualization service---executes within independent container boundaries connected through dedicated software-defined bridge networks.
+
+All experimental tests and soak evaluations reported in this chapter were carried out on a dedicated physical workstation. Table~\ref{tab:test-hardware-environment} summarizes the hardware specifications of the host machine and the container execution runtime.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Experimental Host Hardware and Container Execution Environment}
+\label{tab:test-hardware-environment}
+\vspace{0.2cm}
+\begin{tabular}{ll}
+\toprule
+\textbf{System Parameter} & \textbf{Specification} \\
+\midrule
+Host Processor (CPU)      & Intel(R) Core(TM) Ultra 7 265H (16 physical cores, x86\_64) \\
+CPU Cache Hierarchy       & 24~MiB L3 cache, 48~MiB L2 cache, 1.75~MiB L1 cache \\
+Physical Host Memory      & 64~GB physical RAM \\
+Dedicated Container RAM   & 31~GiB allocated memory with 8.0~GiB swap (WSL2 managed) \\
+Local Storage             & 1~TB NVMe SSD (\texttt{ext4} virtual disk) \\
+Host Operating System     & Microsoft Windows 11 Enterprise / Professional \\
+Linux Runtime Subsystem   & Ubuntu 24.04.4 LTS (Noble Numbat) on WSL2 (Kernel 6.6.87) \\
+Container Engine          & Docker Engine 29.5.3-rd \\
+Orchestration Tool        & Docker Compose v5.1.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The virtualization architecture utilizes the Windows Subsystem for Linux (WSL2) backed by a lightweight Hyper-V hypervisor. Unlike traditional full-system virtual machines, WSL2 provides direct native hardware access to all 16 physical CPU cores without core pinning overhead, while dynamically allocating a bounded 31~GiB RAM slice dedicated to Docker containers. This ensures that the compute and memory benchmarks faithfully represent real-world bare-metal industrial edge deployment conditions.
+
+\clearpage
+
 \section{Testing: testing adjusted simulator}
 \label{sec:testing}
 

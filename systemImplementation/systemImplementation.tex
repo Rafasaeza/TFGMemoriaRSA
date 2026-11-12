@@ -503,7 +503,7 @@ To transfer telemetry seamlessly from the Redpanda broker into QuestDB, a specia
 \section{Stream Processing Layer: Apache Spark Implementation}
 \label{sec:spark-implementation}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:spark-stream-processing}.}
-The stream processing tier is implemented using \textbf{Apache Spark} (version 3.5.0) via its \textbf{Structured Streaming} framework. It is deployed as a dedicated containerized service (\texttt{spark-processing}) within the Docker Compose orchestration stack.
+The stream processing tier is implemented using \textbf{Apache Spark} (version 3.5.0) via its \textbf{Structured Streaming} framework. It is deployed as a set of dedicated containerized services within the Docker Compose orchestration stack.
 
 
 \subsection{Docker Compose Service Definition}
@@ -523,9 +523,9 @@ Once all dependencies are satisfied, streaming execution is launched using \text
 
 \begin{lstlisting}[language=yaml, caption={Apache Spark Docker Compose configuration}, label={lst:spark-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
 services:
-  spark-processing:
+  spark-vda5050-state:
     image: apache/spark:3.5.0
-    container_name: spark-processing
+    container_name: spark-vda5050-state
     depends_on:
       redpanda:
         condition: service_healthy
@@ -539,8 +539,9 @@ services:
       - redpanda-net
       - lakehouse-net
     volumes:
-      - ./jobs:/opt/spark/jobs
+      - ./src:/opt/spark/src
     environment:
+      - PYTHONPATH=/opt/spark/src
       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
       - KAFKA_INPUT_TOPIC=${KAFKA_INPUT_TOPIC:-vda5050-state}
       - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
@@ -550,38 +551,75 @@ services:
       - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
       - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
       - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
-      - PROCESSING_INTERVAL=${PROCESSING_INTERVAL:-15 seconds}
+      - PROCESSING_INTERVAL_BRONZE=${PROCESSING_INTERVAL_BRONZE:-15 seconds}
     command: >
       /opt/spark/bin/spark-submit
       --conf spark.jars.ivy=/tmp/.ivy2
       --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
       --master local[*]
-      /opt/spark/jobs/vda5050_state_writer.py
+      /opt/spark/src/jobs/vda5050_state_writer.py
+
+  spark-fleet-features:
+    image: apache/spark:3.5.0
+    container_name: spark-fleet-features
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    networks:
+      - redpanda-net
+      - lakehouse-net
+    volumes:
+      - ./src:/opt/spark/src
+    environment:
+      - PYTHONPATH=/opt/spark/src
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
+      - KAFKA_INPUT_TOPIC=${KAFKA_INPUT_TOPIC:-vda5050-state}
+      - KAFKA_OUTPUT_TOPIC=${KAFKA_OUTPUT_TOPIC:-fleet-features}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
+      - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
+      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
+      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
+      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
+      - PROCESSING_INTERVAL_SILVER=${PROCESSING_INTERVAL_SILVER:-3 seconds}
+    command: >
+      /opt/spark/bin/spark-submit
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
+      --master local[*]
+      /opt/spark/src/jobs/fleet_features_writer.py
 
   spark-maintenance:
     image: apache/spark:3.5.0
-    profiles:
-      - maintenance
+    restart: unless-stopped
     depends_on:
-      spark-processing:
+      spark-vda5050-state:
         condition: service_started
     networks:
       - lakehouse-net
     volumes:
-      - ./jobs:/opt/spark/jobs
+      - ./src:/opt/spark/src
     environment:
+      - PYTHONPATH=/opt/spark/src
       - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
       - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
       - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
       - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
       - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
-    command: >
-      /opt/spark/bin/spark-submit
-      --conf spark.jars.ivy=/tmp/.ivy2
-      --packages org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
-      --master local[*]
-      /opt/spark/jobs/maintenance_bronze.py
+      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
+      - MAINTENANCE_TARGET=${MAINTENANCE_TARGET:-all}
+      - MAINTENANCE_POLL_INTERVAL=${MAINTENANCE_POLL_INTERVAL:-300}
+      - MAINTENANCE_SNAPSHOT_THRESHOLD=${MAINTENANCE_SNAPSHOT_THRESHOLD:-600}
+      - MAINTENANCE_SIZE_THRESHOLD_KB=${MAINTENANCE_SIZE_THRESHOLD_KB:-500}
+    command: python3 /opt/spark/src/jobs/maintenance_watcher.py
 
 networks:
   redpanda-net:
@@ -596,16 +634,16 @@ Table discovery and atomic metadata commits are therefore resolved against the S
 
 \subsection{Jobs} 
 The streaming layer is implemented through a set of dedicated Spark Structured Streaming jobs, each responsible for a specific stage of the data pipeline. 
-Three jobs compose the current architecture: 
+Three streaming data-path jobs compose the Medallion pipeline: 
   \begin{itemize} 
     \item \texttt{vda5050\_state\_writer}: Persists raw VDA5050 telemetry from Kafka into the Bronze layer. 
     \item \texttt{fleet\_features\_writer}: Extracts, transforms and enriches telemetry into a machine-learning-ready feature representation. 
     \item \texttt{ai\_anomalies\_writer}: Executes real-time anomaly detection and publishes anomaly scores for downstream consumption. 
-  \end{itemize} The latter two jobs implement a Dual-Sink Output Pattern, simultaneously persisting processed data into the data lake and publishing the resulting stream back to Redpanda for further processing. 
+  \end{itemize} In addition, an auxiliary operational job (\texttt{spark-maintenance}) executes asynchronously outside the streaming data flow to perform automated compaction and metadata maintenance on the Iceberg tables. The feature engineering and anomaly detection streaming jobs implement a Dual-Sink Output Pattern, simultaneously persisting processed data into the data lake and publishing the resulting stream back to Redpanda for further processing. 
   
   \paragraph{Dual-Sink Output Pattern} The feature engineering and anomaly detection jobs write their outputs to two independent destinations: 
     \begin{itemize} 
-      \item \textbf{Analytical Persistence Sink (MinIO):} Processed datasets are stored as Apache Iceberg tables within the data lakehouse, enabling historical analytics, schema evolution and time-travel queries. 
+      \item \textbf{Analytical Persistence Sink (MinIO):} Processed datasets are stored as Apache Iceberg tables within the data lakehouse, enabling historical analytics and schema evolution. 
       \item \textbf{Event Streaming Sink (Redpanda):} Processed records are republished to Kafka topics, allowing downstream consumers to access enriched telemetry and anomaly detection results in real time. \end{itemize}
 
 \subsection{Bronze Ingestion Job} \label{subsec:bronze-ingestion-job} 
@@ -617,7 +655,7 @@ The objective of this layer is to preserve the raw telemetry exactly as it was r
 Incoming messages are processed in micro-batches and persisted into an Apache Iceberg table stored in the MinIO object store.
 Spark is configured to access MinIO through the S3A filesystem connector, using path-style access to the endpoint:\texttt{http://minio:9000}.
 
-The target Iceberg table represents the Bronze layer of the data platform and stores the complete telemetry payload together with ingestion metadata required for historical analysis and time-travel operations.
+The target Iceberg table represents the Bronze layer of the data platform and stores the complete telemetry payload together with ingestion metadata required for historical analysis and full data lineage.
 \paragraph{Ingestion and Storage Configuration} 
 The job executes micro-batches at a configurable interval, defined by the environment variable \texttt{PROCESSING\_INTERVAL}.
 \subsection{Silver Feature Engineering Job}
@@ -634,6 +672,30 @@ En el caso de silver, se establece un tiempo de procesamiento por defecto menor 
 \label{subsec:gold-inference-job}
 
 \textit{(TO DO)}
+
+\subsection{Lakehouse Maintenance Job}
+\label{subsec:lakehouse-maintenance-job}
+\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{subsec:arch-lakehouse-maintenance}.}
+
+Continuous micro-batch ingestion into the Bronze table (every 15~seconds) and Silver table (every 3~seconds) continuously writes small Parquet files and generates rapid metadata commits. Over time, this causes the small files problem and metadata bloat. To counteract this without impacting the latency or memory footprint of the active streaming jobs, lakehouse maintenance is decoupled into a dedicated two-stage operational service:
+
+\begin{enumerate}
+    \item \textbf{Smart Observer Daemon (\texttt{maintenance\_watcher.py}):} A lightweight background daemon executed directly under Python~3 without instantiating an Apache Spark session or JVM. At configurable polling intervals (\texttt{MAINTENANCE\_POLL\_INTERVAL}, default 300~seconds), the daemon queries the MinIO S3 API using standard AWS Signature Version~4 requests in pure Python. It reads the Iceberg \texttt{version-hint.text} file to locate the active metadata descriptor (\texttt{v\{version\}.metadata.json}), parses the current snapshot count and computes the JSON metadata size in kilobytes. Maintenance is dynamically triggered only when either of two operational thresholds is breached:
+    \begin{itemize}
+        \item Monitored table snapshots $\ge$ \texttt{MAINTENANCE\_SNAPSHOT\_THRESHOLD} (default: 600 snapshots).
+        \item Metadata descriptor size $\ge$ \texttt{MAINTENANCE\_SIZE\_THRESHOLD\_KB} (default: 500~KB).
+    \end{itemize}
+    This threshold-based observer approach avoids spinning up heavy Spark processes when tables are within optimal parameters, conserving cluster CPU and RAM.
+
+    \item \textbf{Isolated Compaction Execution (\texttt{maintenance.py}):} When a threshold is exceeded, the watcher launches \texttt{maintenance.py} as an isolated \texttt{spark-submit} subprocess. Subprocess isolation guarantees that the JVM is completely terminated and its memory reclaimed by the operating system upon completion. The Spark job connects to the Hadoop Iceberg catalog and sequentially executes three table maintenance procedures via Spark SQL:
+    \begin{itemize}
+        \item \texttt{CALL lakehouse.system.rewrite\_data\_files}: Rewrites and consolidates small micro-batch Parquet files into standardized 64~MiB target files (\texttt{target-file-size-bytes = 67108864}), significantly reducing file count and metadata pointers.
+        \item \texttt{CALL lakehouse.system.rewrite\_manifests}: Reorganizes and defragments the manifest files to accelerate partition pruning during query planning.
+        \item \texttt{CALL lakehouse.system.expire\_snapshots}: Purges obsolete snapshot entries and deletes unreferenced historical Parquet files superseded by compaction (\texttt{retain\_last = 2}, \texttt{older\_than = CURRENT\_TIMESTAMP}), bounding object storage volume while keeping the active snapshot dataset completely intact.
+    \end{itemize}
+\end{enumerate}
+
+The job accepts a configurable target via \texttt{MAINTENANCE\_TARGET} (\texttt{all}, \texttt{bronze}, or \texttt{silver}), defaulting to maintaining both layers of the Medallion lakehouse.
 
 \section{Data Lakehouse Layer Implementation}
 \label{sec:data-lakehouse-implementation}

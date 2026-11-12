@@ -357,15 +357,26 @@ The three leading open table formats---\textbf{Apache Hudi}, \textbf{Delta Lake}
     \item \textbf{ACID Transactions and Snapshot Isolation:} Iceberg provides serializable isolation through an optimistic concurrency model built on atomic metadata commits.
     This guarantees that continuous micro-batch ingestion performed by Spark never interferes with the long-running, read-heavy scans issued by offline model-training routines, as readers always observe a consistent table snapshot.
 
-    \item \textbf{Time Travel and Experiment Reproducibility:} Reproducible machine learning requires the ability to reconstruct the exact dataset used to train a given model.
-    Iceberg maintains an immutable history of table snapshots and natively supports time-travel queries against a specific snapshot or timestamp, avoiding manual dataset duplication.
-
     \item \textbf{Fit for Append-Only Telemetry Workloads:} While Apache Hudi is heavily optimized for Change Data Capture scenarios with frequent record-level updates and deletes, cyber-physical AGV telemetry is strictly append-only.
     Iceberg offers a leaner metadata layout better suited to high-throughput sequential appends and automated file compaction, without the record-indexing overhead that Hudi introduces.
 
     \item \textbf{Safe Schema Evolution:} As robotic platforms evolve, their telemetry payloads may add new diagnostic fields or retire obsolete ones.
     Iceberg supports column addition, renaming, and reordering as a purely metadata-level operation, preserving backward compatibility without rewriting historical Parquet files.
 \end{itemize}
+
+\subsection{Automated Lakehouse Maintenance Architecture}
+\label{subsec:arch-lakehouse-maintenance}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{subsec:lakehouse-maintenance-job}.}
+
+While low-latency micro-batching (15~seconds for Bronze and 3~seconds for Silver) fulfills the near-real-time ingestion requirements of the platform, it inherently introduces the \textit{small files problem} as an architectural side effect. Over continuous 24/7 industrial operation, appending new Parquet data files every few seconds produces tens of thousands of fragmented objects and inflates the commit snapshot tree within object storage. Left unmitigated, this file fragmentation severely degrades the metadata listing speed, partition pruning efficiency, and sequential scanning throughput of downstream machine learning training workflows.
+
+To prevent performance degradation without burdening the real-time ingestion path, the architecture incorporates an independent, decoupled \textbf{Lakehouse Maintenance Tier}. Rather than performing inline compaction during micro-batch execution---which would destabilize streaming latencies---maintenance is orchestrated as an auxiliary operational component operating outside the main Medallion data flow. Architecturally, the maintenance tier addresses three distinct optimization concerns:
+\begin{enumerate}
+    \item \textbf{Data File Compaction:} Merging thousands of small micro-batch Parquet files into standardized target-sized columnar blocks (64~MiB) to optimize sequential I/O and columnar compression ratios.
+    \item \textbf{Manifest Optimization:} Re-indexing and defragmenting Iceberg manifest files and manifest lists to accelerate file pruning during query planning.
+    \item \textbf{Snapshot and Metadata Expiration:} Purging historical snapshot metadata and unreferenced orphaned Parquet data files that have been superseded by compacted files, bounding storage growth and metadata parsing overhead.
+\end{enumerate}
+Crucially, the maintenance process is triggered on demand through automated metadata inspection rather than arbitrary execution schedules, optimizing compute resource utilization in resource-constrained edge deployments.
 
 \subsection{Bifurcated Storage Architecture: Operational vs. Analytical Persistence}
 \label{subsec:bifurcated-storage}
