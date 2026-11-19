@@ -141,7 +141,7 @@ To eliminate this vulnerability permanently, a two-pronged architectural remedia
     \item \textbf{Iceberg Table Schema Properties:} The DDL definitions in \texttt{src/schemas/fleet\_features.py} and \texttt{src/schemas/vda5050\_state.py} were injected with automatic commit-time pruning:
     \begin{itemize}
         \item \texttt{'write.metadata.delete-after-commit.enabled' = 'true'}: Instructs Spark to automatically purge obsolete metadata files synchronously upon committing new snapshots.
-        \item \texttt{'write.metadata.previous-versions-max' = '5'}: Restricts the retained metadata history to the 5 most recent version files, bounding metadata file size permanently below 40~KB.
+        \item \texttt{'write.metadata.previous-versions-max' = '100'}: Restricts the retained metadata history to the 100 most recent version files, providing an adequate optimistic concurrency validation window for maintenance tasks while bounding metadata history below 1.5~MB.
     \end{itemize}
     \item \textbf{Decoupled Smart Maintenance Watcher Daemon:} An autonomous background service (\texttt{maintenance\_watcher.py}) was deployed to monitor MinIO S3 metadata via lightweight HTTP requests (without instantiating a heavy Spark JVM). Whenever accumulated snapshots breach 600 or metadata size exceeds 500~KB, the daemon executes an isolated \texttt{spark-submit} maintenance job to compact Parquet files and expire snapshots, fully releasing its memory upon task completion.
 \end{enumerate}
@@ -162,7 +162,7 @@ Total Lakehouse S3 Storage & 128.0 GiB & \textbf{36.0 MiB} & \textbf{-99.97\%} \
 Silver Table Metadata Size & 122.5 GiB & \textbf{26.0 MiB} & -99.98\% \\
 Bronze Table Metadata Size &   5.0 GiB &  \textbf{1.7 MiB} & -99.96\% \\
 Per-Commit Metadata JSON   &  15.0 MiB &  \textbf{8.7 KiB} & -99.94\% \\
-Retained Metadata Files    & 17,654 versions & \textbf{5 versions} & Bound \& Static \\
+Retained Metadata Files    & 17,654 versions & \textbf{100 versions} & Bound \& Static \\
 Spark Iceberg Commit Time  & 2.5s -- 5.0s & \textbf{0.18s} & \textbf{15$\times$ Faster} \\
 \bottomrule
 \end{tabular}

@@ -165,13 +165,13 @@ where $J_m$ is rotor inertia, $B_m$ viscous friction, $\eta_g$ gearbox efficienc
 \end{equation}
 where $m_{\mathrm{total}} = m_{\mathrm{chassis}} + m_{\mathrm{payload}}$ is the total vehicle mass.
 
-\subsection{Kinematics and Wheel Slip}
+\subsection{Drivetrain Kinematics}
 
-The relationship between rotor speed and linear ground speed $v(t)$ accounts for transmission geometry and wheel slip:
+The kinematic relationship between the electric motor angular velocity $\omega_m(t)$ and linear vehicle ground speed $v(t)$ is governed by the transmission reduction ratio $i_g$ and the nominal wheel radius $r_w$:
 \begin{equation}
-    v(t) = \frac{\omega_m(t)}{i_g} r_w (1 - s(t))
+    v(t) = \frac{\omega_m(t)}{i_g} r_w
 \end{equation}
-where $s(t) \in [0, 1)$ represents the slip ratio. Under nominal traction, $s(t) \approx 0$. When wheel slippage occurs, $s(t) \to 1$, which decouples wheel speed from chassis velocity ($v_{\mathrm{wheel}} \gg v_{\mathrm{ground}}$) while collapsing the ground reaction torque ($\tau_L \to 0$).
+which establishes the direct kinematic coupling between the powertrain rotation and chassis linear translation under nominal traction conditions.
 
 \subsection{Thermal Dissipation Models}
 
@@ -231,7 +231,6 @@ The physical states computed by the model are serialized into the extended VDA~5
     \item Motor angular velocity ($\omega_m$) (\texttt{motor\_speed\_rad\_s})
     \item Motor torque ($\tau_m$) (\texttt{motor\_torque\_nm})
     \item Back-electromotive force ($E_b$) (\texttt{back\_emf\_v})
-    \item Wheel slip ratio ($s$) (\texttt{wheel\_slip})
     \item Motor power ($P_m$) (\texttt{motor\_power\_w})
     \item Battery current ($I_{bat}$) (\texttt{battery\_current\_a})
     \item Battery temperature ($T_{bat}$) (\texttt{battery\_temp\_c})
