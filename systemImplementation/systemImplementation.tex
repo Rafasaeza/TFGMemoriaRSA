@@ -197,10 +197,12 @@ Battery terminal voltage $V_{\mathrm{bat}}(t)$ is represented by an ohmic equiva
     V_{\mathrm{bat}}(t) = V_{\mathrm{ocv}}(SOC) - I_{\mathrm{bat}}(t) R_{\mathrm{int}}(SOC, T_{\mathrm{bat}})
     \label{eq:battery_ecm}
 \end{equation}
-where open-circuit voltage $V_{\mathrm{ocv}}(SOC)$ scales with state of charge ($SOC$), and internal resistance $R_{\mathrm{int}}$ varies with $SOC$, temperature, and battery degradation. State of charge evolves via Coulomb counting based on total drawn power and charging currents:
+where open-circuit voltage $V_{\mathrm{ocv}}(SOC)$ scales with state of charge ($SOC$), and internal resistance $R_{\mathrm{int}}$ varies with $SOC$, temperature, and battery degradation. While discharging, state of charge follows Coulomb counting scaled by a wall-clock factor $k_{\mathrm{dis}}$ (\texttt{discharge\_multiplier}):
 \begin{equation}
-    \frac{dSOC(t)}{dt} = -\frac{I_{\mathrm{bat}}(t)}{Q_{\mathrm{nom}}} \cdot 100
+    \frac{dSOC(t)}{dt} = -\frac{I_{\mathrm{bat}}(t)}{Q_{\mathrm{nom}}} \cdot 100 \cdot k_{\mathrm{dis}}
+    \label{eq:soc_coulomb}
 \end{equation}
+$k_{\mathrm{dis}} = 1$ is the unscaled count. Charging is not multiplied: the charger current is $k_C Q_{\mathrm{nom}}$ at the configured C-rate. The dataset capture uses $k_{\mathrm{dis}} = 20$ and $k_C = 0.5$ ($0.5\mathrm{C}$, about two hours from empty to full). The factor shortens the calendar time of a discharge without changing the current, voltage or temperature that the model publishes. $k_{\mathrm{dis}} = 2$ remains the reference for an unaccelerated shift, about $12\,\%/\mathrm{h}$ and eight hours of continuous driving. At or below $1\,\%$ SoC the drive stops, new orders are rejected and the vehicle publishes a fatal \texttt{BATTERY\_DEPLETED} error until the pack is charged back above that cutoff.
 
 \paragraph{Omission of the polarization branch ($V_{\mathrm{pol}}$):}
 A complete 1-RC ECM introduces a capacitive polarization branch ($\frac{dV_{\mathrm{pol}}}{dt} = -\frac{V_{\mathrm{pol}}}{R_p C_p} + \frac{I_{\mathrm{bat}}}{C_p}$). This branch is deliberately omitted, and its transfer resistance $R_p$ is folded into $R_{\mathrm{int}}$ ($0.035 + 0.015 = 0.050\,\Omega$). 
@@ -249,7 +251,7 @@ Specifically, an on-premise local AI model provided by the enterprise, NOVA, was
 
 The prompts were formulated as rigorous software specification documents detailing the required electromechanical, thermal, and battery equations, architectural constraints within the asynchronous Tokio runtime, Serde serialization structures, runtime fault scenarios triggered via VDA 5050 Instant Actions, and unit test requirements. 
 
-Crucially, the AI-generated code was not incorporated directly into the project without verification. Instead, all algorithmic proposals were systematically reviewed, manually adapted to fit the simulator codebase, validated against theoretical physics curves, and thoroughly tested before final integration. A comprehensive validation of the simulator's physical responses and fault injection behavior is presented in Chapter~\ref{chap:testing_evaluation}.
+Crucially, the AI-generated code was not incorporated directly into the project without verification. Instead, all algorithmic proposals were systematically reviewed, manually adapted to fit the simulator codebase, validated against theoretical physics curves, and thoroughly tested before final integration. The consistency of the published channels with these electromechanical relations is checked in Chapter~\ref{chap:testing_evaluation}.
 
 \section{MQTT Broker Implementation and Integration} 
 \label{sec:mqtt_broker_implementation}
