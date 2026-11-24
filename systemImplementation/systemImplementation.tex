@@ -171,7 +171,7 @@ The kinematic relationship between the electric motor angular velocity $\omega_m
 \begin{equation}
     v(t) = \frac{\omega_m(t)}{i_g} r_w
 \end{equation}
-which establishes the direct kinematic coupling between the powertrain rotation and chassis linear translation under nominal traction conditions.
+which establishes the direct kinematic coupling between the powertrain rotation and chassis linear translation under nominal traction conditions. Wheel wear, defined below, keeps this identity for the wheel speed and scales the ground speed by $(1-s)$.
 
 \subsection{Thermal Dissipation Models}
 
@@ -213,7 +213,8 @@ A complete 1-RC ECM introduces a capacitive polarization branch ($\frac{dV_{\mat
 Rather than injecting synthetic noise into high-level features, faults perturb the physical equations directly:
 \begin{itemize}
     \item \textbf{Mechanical Stall:} Imposes $\omega_m = 0$, collapsing back-EMF ($E_b = 0$) and causing the current to surge to the drive limit, accompanied by rapid thermal rise and battery voltage sag.
-    \item \textbf{Wheel Slippage:} Forces $s(t) \to 1$, reducing load torque ($\tau_L \to 0$) while motor speed remains high.
+    \item \textbf{Wheel Wear} (\texttt{wheelWear}): A slip $s$ accumulates over the injection window and then stays. The rotor keeps the commanded speed, while ground speed falls to $(1-s)$ times the wheel speed, so the same route takes longer. The extra rolling resistance raises steady-state current and winding temperature. The drive does not stall.
+    \item \textbf{Bearing Degradation} (\texttt{bearingDegradation}): Shaft friction grows across the injection window and then stays, raising current and temperature. The tracked speed is modulated by a few percent at $0.3\,\mathrm{Hz}$, a wobble that remains visible in the $1\,\mathrm{Hz}$ sample.
     \item \textbf{Gearbox Degradation:} Injects an additive friction torque $\tau_{\mathrm{friction}}$, increasing steady-state current and operating temperature.
     \item \textbf{Stator Fault:} Injects harmonic current ripple and multiplies copper Joule heating.
     \item \textbf{Battery SOH Degradation:} Multiplies $R_{\mathrm{int}}$, producing pronounced voltage drops during acceleration steps.

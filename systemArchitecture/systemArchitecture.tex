@@ -78,12 +78,12 @@ Model training is performed offline using Python-based machine learning framewor
 This approach provides flexibility for feature engineering, experimentation, hyperparameter tuning, and model evaluation.
 
 In contrast, model inference is integrated directly into the Apache Spark streaming pipeline.
-Once a model has been trained and validated, it is exported and embedded into the stream processing layer, allowing predictions to be generated in real time as new AGV telemetry events are processed.
-This design avoids the latency associated with external prediction services and enables seamless integration with the event-driven architecture.
+Once a model has been trained and validated, the promoted version is published through the model registry described in Section~\ref{sec:arch_ml} and loaded by the stream processing layer, so predictions are produced as new AGV telemetry events arrive.
+This design avoids the latency associated with external prediction services and keeps inference on the same event bus as the rest of the platform.
 
 The separation of training and inference responsibilities allows each workload to be optimized independently.
 Training processes prioritize model accuracy and experimentation capabilities, whereas inference processes prioritize low latency, scalability, and operational reliability.
-Furthermore, the architecture facilitates future model updates, since newly trained models can be deployed to the streaming environment without requiring modifications to the surrounding data processing infrastructure.
+A newly trained model reaches the stream by promotion in the registry, without modifying the ingestion or feature pipelines.
 
 \section{Source Systems Layer}
 \label{sec:arch_source_systems}
@@ -348,7 +348,7 @@ In particular, raw files offer no transactional guarantees, suffer from the ``sm
 To overcome these issues, modern Lakehouse architectures interpose an open \textbf{Table Format} layer between the object store and the compute engines, endowing the data lake with database-grade semantics \cite{apache_iceberg}.
 
 The three leading open table formats---\textbf{Apache Hudi}, \textbf{Delta Lake}, and \textbf{Apache Iceberg}---were considered during the design phase.
-\textbf{Apache Iceberg} was selected as the analytical table format of the platform on the basis of the following architectural drivers \cite{okolnychyi2024iceberg}:
+\textbf{Apache Iceberg} was selected as the analytical table format of the platform on the basis of the following architectural drivers:
 
 \begin{itemize}
     \item \textbf{Engine-Agnostic, Vendor-Neutral Specification:} Unlike Delta Lake, which has historically been closely associated with the Spark and Databricks ecosystem, Iceberg was designed from its inception as an open, engine-neutral specification.
@@ -390,10 +390,91 @@ A core architectural decision of the proposed platform is the explicit decouplin
 
 This bifurcated storage design isolates analytical queries and heavy machine learning workloads from live operational monitoring, ensuring that intensive model training scans do not degrade dashboard rendering performance or message ingestion throughput.
 
-\section{Machine Learning layer}
+\section{Machine Learning Layer}
 \label{sec:arch_ml}
 \textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:ml_pipeline_implementation}.}
-TO DO!
+
+The Machine Learning (ML) layer is the analytical tier that detects electromechanical and thermal anomalies in the AGV telemetry. Offline model development and online scoring have different lifecycles, latency budgets, and failure modes, so the layer is split into two operational perspectives and bound by two interfaces: a shared preprocessing contract and a model-registry control plane.
+
+\begin{enumerate}
+    \item \textbf{Training perspective.} An independent containerized service reads historical telemetry from the Silver lakehouse, builds the windows defined by the shared contract, standardizes them, and trains and selects the reconstruction model. It stays off the operational streaming path.
+    \item \textbf{Inference perspective.} Scoring runs inside the Apache Spark Structured Streaming job that consumes the platform event bus. Placing the forward pass in that job avoids a remote prediction service and the network hop, serialization boundary, and availability coupling that a REST or gRPC model server would add.
+\end{enumerate}
+
+The perspectives remain consistent only if they agree on the input geometry and on the numerical baseline of whichever model is currently promoted. The geometry is the shared library \texttt{ml-common}. The baseline travels with the promoted model through MLflow~\cite{mlflow}. Figure~\ref{fig:ml-subsystem-architecture} shows both interfaces.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\linewidth]{ml-subsystem-architecture.drawio.png}
+  \caption{Machine learning subsystem. Training publishes a promoted model and its fitted scaler to MLflow. \texttt{ml-common} fixes the input contract for training and inference. The Spark job scores \texttt{fleet-features} and publishes \texttt{ai-anomalies}; QuestDB is downstream of that topic.}
+  \label{fig:ml-subsystem-architecture}
+\end{figure}
+
+\subsection{Data Preparation and Shared Preprocessing Pipeline}
+\label{subsec:arch_ml_prep}
+
+The training service reads the Silver table \texttt{fleet\_features}. Iceberg snapshot isolation supplies a stable table version for that read, so a long training scan does not lock the streaming commits that continue to append telemetry.
+
+Preparation follows the order required to keep the fitted baseline honest:
+\begin{enumerate}
+    \item \textbf{Projection onto the detection subspace.} The shared contract names the channels the model may see and the order in which they appear: planar and angular velocity, battery voltage, current and temperature, and motor current, temperature and power. Records that violate the contract are discarded. The remainder are ordered by vehicle and by event time.
+    \item \textbf{Per-vehicle windows, then a chronological split.} Sliding windows are built independently for each vehicle. A window never mixes two vehicles, and a window that contains a temporal gap is not emitted. Within each vehicle, earlier windows form the training split and later windows the validation split, so fitting cannot observe that vehicle's future operation.
+    \item \textbf{Standardization fitted on the training windows only.} Mean and variance are estimated on the training windows. Validation windows are transformed with those frozen parameters and do not participate in the estimate. The tensors that enter the model have shape $\mathbf{X} \in \mathbb{R}^{B \times W \times F}$, where $B$ is the batch size, $W$ the window length fixed by the contract, and $F$ the number of contracted channels.
+\end{enumerate}
+
+\paragraph{Feature scaling.}
+The contracted channels do not share a physical unit. Motor and battery temperatures move over tens of degrees, while velocities and currents occupy a much smaller numeric range. Fed to a squared reconstruction loss, the large-magnitude channels would dominate the gradient and the anomaly score, and a genuine deviation in a small-magnitude channel would barely move either. Standardization (zero mean and unit variance per channel) places every contracted signal on a common numeric footing.
+
+Robust range scaling was set aside. The detector is trained on the normal operating regime, and the mean and variance of that regime are the baseline that inference must reuse. A quantile scaler would describe a different baseline and would still have to be frozen and shipped with the model; it was not the selected transform.
+
+\textit{Architectural Decision: Shared Preprocessing Contract.}
+Training and inference are separate runtimes. If they disagreed on feature order, window length, step, or the rule that rejects a gapped window, the deployed model would score a different object from the one it was trained on. That logic is therefore factored into one library, \texttt{ml-common}, consumed by the training service and by the Spark inference job. The library loads a single versioned contract that fixes the feature list and its order, the window geometry, the maximum admissible gap between samples, the identity of the registered model, and the threshold policy. Window construction is the same rule on both sides. The library carries no fitted statistics: it defines the shape of the input, not the numbers measured on a particular training run.
+
+\textit{Architectural Decision: MLflow as the Model and Artifact Control Plane.}
+The fitted scaler and the selected weights belong to one training run and must be promoted together. A shared directory mounted by the training container and by the streaming job was rejected: it couples two services that are deployed independently, it keeps no lineage from a score back to the run that produced it, and it offers no promotion step. Publishing the network as a remote prediction service had already been rejected on latency grounds.
+
+MLflow is the control plane that remains~\cite{mlflow}. Each training run records its parameters and validation curve in the tracking server, and publishes the fitted scaler together with the selected weights. The network is registered in the Model Registry. Inference does not read the training workspace. It resolves the version currently marked for production and loads the scaler that was published with that same run, so live windows are standardized with the mean and variance of the training split. A successor model reaches the stream by promotion. The streaming topology stays unchanged.
+
+\subsection{Model Architecture and Training Decisions}
+\label{subsec:arch_ml_model}
+
+The standardized windows are the input of the training loop. Model selection is governed by the following decisions:
+
+\begin{itemize}
+    \item \textbf{Gated Recurrent Unit (GRU) Topology:}
+    Industrial AGV telemetry exhibits continuous temporal dependencies. In accordance with the state of the art analysis (Chapter~\ref{chap:state_of_the_art}, Section~\ref{sec:anomaly-taxonomy}), the \textbf{Gated Recurrent Unit Autoencoder (GRU-AE)} was selected as the foundational model architecture. Compared to traditional RNNs, GRUs mitigate vanishing and exploding gradients through internal gating. Compared to Long Short-Term Memory (LSTM) networks, GRUs use fewer gating equations and parameters, with corresponding gains in training time and in the cost of in-stream scoring \cite{dey2017gate}. The selected topology encodes the window, compresses it to a latent state, and decodes a reconstruction of the same length and width as the input.
+
+    \item \textbf{Loss Criterion: Mean Squared Error:}
+    The autoencoder is trained unsupervised to reconstruct normal operational sequences, minimizing the error between the input window $\mathbf{X}$ and its reconstruction $\hat{\mathbf{X}}$. Mean squared error was selected for two reasons:
+    \begin{enumerate}
+        \item \textit{Quadratic penalty on large residuals.} Squaring the residual emphasizes sharp electromechanical deviations over small sensor noise.
+        \item \textit{Channel attribution.} The loss separates across channels:
+        \begin{equation}
+            \text{MSE}_j = \frac{1}{W} \sum_{t=1}^{W} \left( x_{t,j} - \hat{x}_{t,j} \right)^2
+        \end{equation}
+        The inference stage can therefore emit a scalar score and, when that score is elevated, the contribution of each contracted channel. That contribution is the diagnostic payload of the observability dashboards.
+    \end{enumerate}
+
+    \item \textbf{Optimization Algorithm: Adam:}
+    \textbf{Adam} (Adaptive Moment Estimation) was selected as the optimizer. Per-parameter adaptive rates and momentum keep the updates stable on noisy robotic channels without a hand-tuned learning-rate schedule for each weight.
+
+    \textit{Open comparison.} AdamW, SGD with Nesterov momentum, and RMSprop remain credible alternatives. Adam is the baseline of this design. An empirical comparison of convergence and generalization is left to the evaluation, and is not required to fix the data-flow architecture.
+
+    \item \textbf{Plateau Learning-Rate Schedule:}
+    The learning rate stays at its initial value while validation loss is still decreasing, and is reduced when that loss stops improving. The schedule adapts to the run. It does not impose a fixed decay timetable chosen before training.
+
+    \item \textbf{Early Stopping on Validation Loss:}
+    An unsupervised reconstructor overfits when it starts to reproduce the particular noise of the training windows, including behavior that should have remained surprising. Validation loss is monitored at each epoch. If it fails to improve over a patience interval, training stops and the parameters with the lowest validation loss are the ones retained for promotion.
+\end{itemize}
+
+\subsection{Online Inference on the Streaming Job}
+\label{subsec:arch_ml_inference}
+
+The inference job is a Spark Structured Streaming consumer of the Redpanda topic \texttt{fleet-features}. On each micro-batch it validates records with \texttt{ml-common}, completes per-vehicle windows under the same gap and ordering rules used in training, standardizes them with the scaler of the promoted model, and reconstructs them with that model. The mean squared error of the reconstruction is compared with the warning level and the anomaly level carried by the promoted version, and the window is labeled normal, suspicious, or anomalous. Elevated windows also carry the channels that dominate the error.
+
+The job has one sink, the topic \texttt{ai-anomalies}. QuestDB ingests that topic through the Kafka Connect path already adopted for operational time series, and Grafana reads QuestDB. Past scores are operational events. The history from which a later model is trained remains the Silver table \texttt{fleet\_features}.
+
+Promotion is the deployment mechanism. The streaming job resolves the production version in the Model Registry and adopts a newly promoted version without a change to topics, contracts, or the surrounding Bronze and Silver pipelines.
 
 \section{Observability Layer: Grafana Dashboards}
 \label{sec:arch_observability}
