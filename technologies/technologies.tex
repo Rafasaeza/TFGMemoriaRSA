@@ -21,6 +21,16 @@ Docker is a suite of products that leverages operating-system-level virtualizati
 
 This allowed the system to be split into well differentiated microservices, each packaged and deployed independently.
 
+\section{Python}
+Python is a general-purpose programming language with a large ecosystem for data processing and machine learning. The same runtime can host analytical libraries, web services and streaming jobs, which keeps the processing code in one language from ingestion through to model training~\cite{python}.
+
+The Spark jobs, the shared preprocessing contract and the offline training programme are written in Python.
+
+\section{Rust}
+Rust is a systems programming language that guarantees memory safety at compile time and offers predictable performance without a garbage collector. Its asynchronous runtime is well suited to long-running services that must publish messages at a steady rate~\cite{rust}.
+
+The vehicle simulator is written in Rust. It integrates the physical models of the drivetrain, the battery and the thermal behaviour, and publishes the resulting state over MQTT.
+
 \section{Visual Studio Code}
 Visual Studio Code is an editor developed by Microsoft, available on Windows, Linux, macOS and web browsers. It provides debugging support, syntax highlighting, intelligent code completion, snippets, code refactoring and built-in version control through Git. Its look and behaviour can be tailored through themes, keyboard shortcuts and preferences, and its functionality can be extended with plugins, including turning it into a full IDE for other programming languages~\cite{vscode}.
 
@@ -35,8 +45,10 @@ Draw.io is an open source graph drawing application. It is used to translate the
 \section{Data Streaming Platform: Redpanda}
 Redpanda is a data streaming platform compatible with the Apache Kafka API\cite{kafka_api} that delivers fault-tolerant message streaming with a simpler architecture and lower latency. In this project it acts as the central event bus that decouples the producers of telemetry data from the downstream consumers~\cite{redpanda}.
 
-\section{Telegraph}
-To do
+\section{Telemetry Bridge: Telegraf}
+Telegraf is an open-source agent for collecting, processing and forwarding metrics and events. Its plugin set includes an MQTT consumer and a producer for the Kafka API, so a single process can move messages from a broker into an event bus without a custom service~\cite{telegraf}.
+
+In this project it is the bridge between Mosquitto and Redpanda. It subscribes to the vehicle state topics and republishes the original JSON on one shared topic, adding only the record key and the headers that identify the vehicle. Parsing and feature engineering are left to the downstream processing jobs.
 
 \section{Kafka Connect}
 Kafka Connect is a framework and toolset for building and running data pipelines between Apache Kafka® and other data systems. It provides a scalable and reliable way to move data in and out of Kafka. It has reusable plugins that you can use to stream data between various external Kafka systems\cite{kafka_connect}.
@@ -46,10 +58,10 @@ Apache Spark is a unified analytics engine for large-scale data processing. It o
 \section{Apache Iceberg}
 Apache Iceberg is an open table format built for large analytical datasets stored in data lakes. Instead of treating the lake as a plain collection of files, Iceberg manages them as real tables, adding database-like capabilities such as schema evolution, time travel and more efficient query planning on top of object storage. This improves the reliability, performance and flexibility of modern data architectures, letting analysts, data scientists and engineers work with data lake data more easily~\cite{apache_iceberg}.
 
-\section{S3 Garage}
-Garage is a lightweight, geo-distributed data store that implements the Amazon S3 object storage protocol. It lets applications store large blobs such as pictures, videos or documents in a redundant multi-node setup, and the S3 API is versatile enough to also serve static websites~\cite{garage}.
+\section{Object Storage: MinIO}
+MinIO is an open-source object storage server that implements the Amazon S3 API. It targets high-throughput reads and writes, runs as a single node or as a distributed cluster, and provides the read-after-write consistency that analytical table formats require for their metadata commits~\cite{minio}.
 
-This technology provides the storage layer where the Iceberg tables will be persisted, enabling the construction of the Data Lakehouse.
+It is the storage layer of the data lakehouse. Iceberg tables, their Parquet data files and the Spark streaming checkpoints are kept in one bucket, which both the streaming jobs and the offline training programme access through the S3 protocol.
 
 \section{Time Series Database: QuestDB}
 QuestDB is an open source time-series database engineered for low latency. Its column-oriented, time-partitioned storage engine, together with memory-mapped files and vectorized (SIMD) execution, supports high-throughput ingestion and millisecond-level analytical queries. SQL is extended with time-series operators such as SAMPLE BY, LATEST ON and ASOF JOIN~\cite{questdb}.
@@ -61,10 +73,44 @@ Grafana open source software allows querying, visualizing, alerting on and explo
 
 This enables the observation part of the application, acting as the end application that the worker will see.
 
-\section{Mlflow}
-MLflow is an open-source platform for managing the machine learning lifecycle, providing capabilities for experiment tracking, parameter and metric logging, artifact storage, model versioning, and deployment management. 
+\section{MLflow}
+MLflow is an open-source platform for managing the machine learning lifecycle, providing capabilities for experiment tracking, parameter and metric logging, artifact storage, model versioning, and deployment management.
 It helps ensure reproducibility, traceability, and governance of machine learning workflows~\cite{mlflow}.
 
+Training runs are recorded in its tracking server. The model registry then publishes the version treated as the model in force, together with the fitted scaler that online inference must apply.
+
 \section{PyTorch}
-PyTorch is an open-source machine learning framework for building, training, and deploying deep learning models. 
+PyTorch is an open-source machine learning framework for building, training, and deploying deep learning models.
 It provides a flexible tensor computation library with automatic differentiation, enabling efficient development of neural network architectures and AI applications~\cite{pytorch}.
+
+The anomaly detector is a gated recurrent autoencoder implemented and trained with PyTorch, and the streaming job reloads the promoted weights with the same framework.
+
+\section{scikit-learn}
+scikit-learn is an open-source library of classical machine learning algorithms and preprocessing transformers. Its estimators share a fit and transform interface, which separates the moment at which statistics are estimated from the moment at which they are applied to new data~\cite{scikit-learn}.
+
+The training pipeline uses it to standardise each telemetry channel on the training windows only. The fitted transformer is stored beside the network weights, so that live scoring reuses the same scale.
+
+\section{Factory Orchestrator: Node-RED}
+Node-RED is a flow-based programming tool for connecting devices, APIs and online services. A flow is a graph of nodes, and the MQTT nodes make it a practical way to prototype industrial control logic without writing a dedicated service~\cite{nodered}.
+
+It runs the simulated factory. Stock, robot roles, charging and mission dispatch are expressed as flows that speak VDA~5050 orders and instant actions to the vehicle simulator. Telemetry stays with the simulator. A dashboard on the same service injects and clears physical faults on a chosen vehicle.
+
+\section{Digital Twin}
+The digital twin is a browser application that renders the factory and the fleet in three dimensions. The interface is built with React, and the scene is drawn with Three.js through React Three Fiber. The built files are served as static content~\cite{react,threejs}.
+
+The view is subscribe-only. Poses, orders and connection state are reconstructed from VDA~5050 messages, and an optional layer draws the stock and production events published by the orchestrator. Vehicle commands and factory logic remain with the orchestrator and the simulator.
+
+\section{Platform Portal}
+The platform portal gathers the operator-facing addresses of the stack on a single page. Its backend is a FastAPI service and its interface is a React application~\cite{fastapi,react}.
+
+It probes the health and the response latency of the running services, from the dashboards and the databases to the model registry and the factory tools, and links through to each of them.
+
+\section{Redpanda Console}
+Redpanda Console is a web interface for clusters that speak the Kafka protocol. It exposes topics, individual records, consumer groups and the administrative API of the broker~\cite{redpanda_console}.
+
+It is the inspection tool for the live topics of the platform: the raw vehicle state, the feature stream and the anomaly assessments can be read without writing a consumer.
+
+\section{Simulator Control Surface: Streamlit}
+Streamlit is a Python framework that turns a script into an interactive web application, with widgets for selection, input and actions bound directly to the Python code~\cite{streamlit}.
+
+An optional visualiser built with it draws the simulated vehicles on a two-dimensional map and sends placement, route, pick and drop commands to one selected vehicle. It is started apart from the main stack. Routine factory traffic is issued by the orchestrator, and this surface is reserved for manual control of the simulator.

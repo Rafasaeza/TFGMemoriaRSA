@@ -1,0 +1,34 @@
+# Factory Orchestrator (Node-RED master control).
+#
+# Runs the deterministic factory process model and dispatches VDA5050 orders /
+# instant actions to the robot fleet. Design: ./FACTORY_DESIGN.md
+#
+# Part of the main stack: `docker compose up -d` from the repository root starts it.
+
+services:
+  factory-orchestrator:
+    image: factory-orchestrator:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${NODERED_PORT:-1880}:1880"
+    environment:
+      # Broker and VDA5050 topic prefix come from the root .env contract.
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
+      FACTORY_VDA_PREFIX: ${FACTORY_VDA_PREFIX:-uagv/v2/rikeb}
+      # flows.json is the read-only source of truth; never write it from the editor.
+      NR_FLOW_FILE: "false"
+    volumes:
+      # Flow definition (source of truth) and persistent context/stock store.
+      - ./flows.json:/data/flows.json:ro
+      - nodered-data:/data
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - mqtt-net
+    restart: unless-stopped
+
+volumes:
+  nodered-data:

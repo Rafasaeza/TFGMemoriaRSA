@@ -4,7 +4,9 @@
 
 \section{Introduction}
 
-This chapter evaluates the functional fidelity, operational resilience, and throughput performance of the proposed predictive maintenance and anomaly detection platform. The evaluation assesses both the consistency of the generated telemetry with its electromechanical model and the stability of the distributed streaming lakehouse under a sustained synthetic workload. \textit{(To complete: additional evaluation sections and machine learning validation procedures will be incorporated as the platform matures.)}
+This chapter evaluates the functional fidelity, operational resilience, and throughput performance of the proposed predictive maintenance and anomaly detection platform. The evaluation assesses both the consistency of the generated telemetry with its electromechanical model and the stability of the distributed streaming lakehouse under a sustained synthetic workload.
+
+\textit{(TO DO: the evaluation of the anomaly detector, covering reconstruction scores, classification thresholds, and the injected fault scenarios, will be added in a later revision of this chapter. No further tests are available yet. The sections below cover the simulator physics and a sustained run of the data pipeline.)}
 
 \paragraph{Experimental Test Environment and Reproducibility.}
 To guarantee strict environment parity, reproducibility, and process isolation, the entire data platform is deployed as a containerized stack orchestrated via Docker Compose. Every functional component---including the native Rust-based vehicle simulator, the Eclipse Mosquitto MQTT broker, the Telegraf ingestion bridge, the Redpanda distributed streaming backbone, the Apache Spark Structured Streaming engines, the Apache Iceberg lakehouse on MinIO S3, the QuestDB time-series database, and the Grafana visualization service---executes within independent container boundaries connected through dedicated software-defined bridge networks.

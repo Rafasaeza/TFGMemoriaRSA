@@ -1,3 +1,36 @@
 % !TeX root = ../main.tex
 \chapter{Conclusions and Future Work}
 \label{chap:conclusions}
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+\textit{(TO DO)}
+
+\section{Future Work}
+\label{sec:future_work}
+
+The conclusions of this thesis, set against the objectives of Chapter~\ref{chap:introduction}, are left to be written once the evaluation of the detector is closed. Three limitations are already fixed by the scope of the prototype. They are recorded here so that the missing work is explicit.
+
+\subsection{A central authentication service}
+\label{subsec:future_authentication}
+
+The platform does not identify its users. Grafana, MLflow, the MinIO console, QuestDB, the Node-RED editor, and the portal answer whoever can open the corresponding port, in several cases with the password left by the container image. The omission follows from the time available for the thesis and from the decision to build a proof of concept on a development machine, rather than a system operated in a plant.
+
+That gap is not a detail of the interface. The same pages that display a battery also inject a fault into a vehicle, promote a model onto the live stream, and read the telemetry of the fleet. Without a user there is no record of who performed the action, and no basis on which to refuse it. In a plant this would be unacceptable: the prototype already concentrates the commands that move a vehicle and the model that labels its behaviour.
+
+The continuation is a single authentication service in front of these consoles. An operator would sign in once, and each tool would accept that identity, so that Grafana, the model registry, and the orchestrator do not each invent a password of their own. The importance of the service is operational. It is the control that turns a set of open ports into a system that can say who is allowed to act on the fleet.
+
+\subsection{Encrypted communications}
+\label{subsec:future_tls}
+
+Vehicle state, orders, and instant actions travel as plain MQTT. The links that follow, from Telegraf to Redpanda and from the streaming jobs to MinIO and QuestDB, are likewise unencrypted, and the clients are not authenticated by a certificate. On the workstation used for this thesis the exposure is easy to overlook. On a factory network a listener can read the state of every vehicle, and a publisher can submit an order or a fault, because the broker accepts the connection.
+
+Protecting those hops with Transport Layer Security (TLS) is the corresponding line of work. It begins at the MQTT broker, which is the boundary shared by the vehicles and the orchestrator, and it extends to the streaming and storage connections. Encryption and the authentication service of Section~\ref{subsec:future_authentication} address different exposures, and a deployment beyond this prototype needs both: one so that a console has a user, the other so that a message on the network cannot be read or forged in transit.
+
+\subsection{Deployment on Kubernetes}
+\label{subsec:future_kubernetes}
+
+The stack runs under Docker Compose on a single workstation. Chapter~\ref{chap:introduction} already bounds the prototype by the processor, the memory, and the disk of that host. A fleet larger than the five simulated vehicles, or a Spark job that must outgrow one process, needs a scheduler that can place the services on more than one machine and restart them when a node fails.
+
+Kubernetes is a concrete form of that deployment. The services are already containers, with health checks and one-shot initialisation containers, which correspond to probes and jobs. The future work is to run the same pipeline under Kubernetes, so that the broker, the stream processors, and the object store can be scaled independently of the laptop used here. The path from the vehicle to the anomaly score remains the one designed in Chapter~\ref{chap:system_architecture}.

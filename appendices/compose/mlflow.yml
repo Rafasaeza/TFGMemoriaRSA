@@ -1,0 +1,43 @@
+services:
+  # MLflow Tracking Server (tracking infrastructure only at this stage).
+  # Runs on the dedicated `ml-net` network shared with the `ml-train` job so
+  # the ML module can reach it via http://mlflow:5000.
+  # Start explicitly with:
+  #   docker compose up -d mlflow
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.18.0
+    container_name: mlflow
+    command: >
+      mlflow server
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI:-sqlite:////mlartifacts/mlflow.db}
+      --artifacts-destination ${MLFLOW_ARTIFACTS_DESTINATION:-/mlartifacts}
+      --host 0.0.0.0
+      --port 5000
+      --allowed-hosts ${MLFLOW_ALLOWED_HOSTS:-*}
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    volumes:
+      # Local Docker volume persisting the tracking backend (SQLite) and
+      # the artifact store.
+      - mlflow-data:/mlartifacts
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - ml-net
+    restart: unless-stopped
+
+volumes:
+  mlflow-data:
+
+networks:
+  ml-net:

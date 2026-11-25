@@ -1,0 +1,19 @@
+# Base compose file – uses a pre-built image and expects an external MQTT broker.
+# To build from source locally, docker-compose.override.yml is applied automatically.
+#
+# Configure the broker address and the mission parameters in config.toml before
+# starting the container (the electromechanical calibration ships in
+# src/config.rs). Inside the stack the broker is reached via its service
+# name on the shared mqtt-net network (e.g. "mosquitto:1883").
+
+services:
+  simulator:
+    image: vda5050-vehicle-simulator:latest
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - mqtt-net
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,0 +1,45 @@
+% !TeX root = ../main.tex
+\chapter{Deployment Manifests and Simulator Specification}
+\label{app:deployment}
+
+This appendix collects the deployment files and the specification used to extend the vehicle simulator. Chapter~\ref{chap:system_implementation} describes what those files do. The listings are the files of the prototype, copied so the manuscript can be read without the repository open beside it. Credentials in them are the local development defaults.
+
+\section{Docker Compose}
+\label{sec:app_compose}
+
+The root file includes one Compose file per subsystem, declares the bridge networks, and mounts the partner certificate. The simulator include also applies the override that builds the image from source. Telegraf is not a file of its own: it is the second service of the MQTT broker file. Training is the \texttt{ml} profile of the machine-learning module and does not start with \texttt{docker compose up}.
+
+\lstinputlisting[language=yaml,caption={Root Compose file},label={lst:main-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/root.yml}
+
+\lstinputlisting[language=yaml,caption={MQTT broker and Telegraf},label={lst:mqtt-broker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/mqtt-broker.yml}
+
+\lstinputlisting[language=yaml,caption={Vehicle simulator},label={lst:vda5050-simulator-docker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/simulator.yml}
+
+\lstinputlisting[language=yaml,caption={Simulator build override},label={lst:simulator-override},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/simulator-override.yml}
+
+\lstinputlisting[language=yaml,caption={Redpanda},label={lst:redpanda-docker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/redpanda.yml}
+
+\lstinputlisting[language=yaml,caption={Spark streaming jobs},label={lst:spark-docker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/spark.yml}
+
+\lstinputlisting[language=yaml,caption={MinIO},label={lst:minio-docker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/minio.yml}
+
+\lstinputlisting[language=yaml,caption={QuestDB and Kafka Connect},label={lst:questdb-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/questdb.yml}
+
+\lstinputlisting[language=yaml,caption={Grafana},label={lst:grafana-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/grafana.yml}
+
+\lstinputlisting[language=yaml,caption={MLflow},label={lst:mlflow-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/mlflow.yml}
+
+\lstinputlisting[language=yaml,caption={Training module},label={lst:ml-module-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/ml-module.yml}
+
+\lstinputlisting[language=yaml,caption={Factory orchestrator},label={lst:orchestrator-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/factory-orchestrator.yml}
+
+\lstinputlisting[language=yaml,caption={Digital twin},label={lst:twin-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/digital-twin.yml}
+
+\lstinputlisting[language=yaml,caption={Platform portal},label={lst:portal-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/platform-portal.yml}
+
+\section{Specification used to extend the simulator}
+\label{app:simulator_prompt}
+
+The electromechanical extension of the simulator was specified to the model as the document below, and the generated code was reviewed against it before it was kept. The first draft asked for a separate physics task, a full armature inductance, a polarisation branch in the battery, and four faults. The integrated code does not do those four things, and it adds wheel wear, bearing wear, the accelerated discharge, and the depletion stop. Those departures are marked in the document as implemented deviations, so the text matches the simulator that publishes the telemetry. The equations used in Chapter~\ref{chap:system_implementation} are the ones this specification settles on.
+
+\lstinputlisting[caption={Simulator extension specification},label={lst:simulator-prompt},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/prompt/complete_sensor_adaptation.md}

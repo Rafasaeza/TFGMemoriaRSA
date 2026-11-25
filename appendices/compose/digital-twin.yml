@@ -1,0 +1,30 @@
+# 3D Digital Twin of the factory: pure VDA5050 observer (subscribe-only).
+#
+# The browser connects directly to Mosquitto over WebSockets; this container
+# only serves static files. DT_MQTT_WS_URL empty -> ws://<page host>:9883.
+
+services:
+  digital-twin:
+    image: factory-digital-twin:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${DIGITAL_TWIN_PORT:-8090}:80"
+    environment:
+      DT_MQTT_WS_URL: ${DT_MQTT_WS_URL:-}
+      DT_MQTT_USERNAME: ${DT_MQTT_USERNAME:-}
+      DT_MQTT_PASSWORD: ${DT_MQTT_PASSWORD:-}
+      DT_VDA_INTERFACE: ${DT_VDA_INTERFACE:-uagv}
+      DT_VDA_MAJOR_VERSION: ${DT_VDA_MAJOR_VERSION:-v2}
+      DT_VDA_MANUFACTURER: ${DT_VDA_MANUFACTURER:-+}
+      DT_ROBOT_LABELS: ${DT_ROBOT_LABELS:-t11=AGV_01,t12=AGV_02,t13=AGV_03,t14=AGV_04,t15=AGV_05}
+      DT_STALE_AFTER_S: ${DT_STALE_AFTER_S:-5}
+      DT_ANOMALY_TOPIC: ${DT_ANOMALY_TOPIC:-}
+      # Orchestrator factory/* context (production visuals); set empty to disable.
+      DT_FACTORY_TOPIC_PREFIX: ${DT_FACTORY_TOPIC_PREFIX-factory}
+    depends_on:
+      - mosquitto
+    networks:
+      - mqtt-net
+    restart: unless-stopped

@@ -1,0 +1,157 @@
+services:
+  spark-vda5050-state:
+    image: apache/spark:3.5.0
+    container_name: spark-vda5050-state
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    networks:
+      - redpanda-net
+      - lakehouse-net
+    volumes:
+      - ./src:/opt/spark/src
+    environment:
+      - PYTHONPATH=/opt/spark/src
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
+      - KAFKA_TOPIC_VDA5050_STATE=${KAFKA_TOPIC_VDA5050_STATE:-vda5050-state}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
+      - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
+      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
+      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
+      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
+      - PROCESSING_INTERVAL_BRONZE=${PROCESSING_INTERVAL_BRONZE:-15 seconds}
+    command: >
+      /opt/spark/bin/spark-submit
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
+      --master local[*]
+      /opt/spark/src/jobs/vda5050_state_writer.py
+
+  spark-fleet-features:
+    image: apache/spark:3.5.0
+    container_name: spark-fleet-features
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+    networks:
+      - redpanda-net
+      - lakehouse-net
+    volumes:
+      - ./src:/opt/spark/src
+    environment:
+      - PYTHONPATH=/opt/spark/src
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
+      - KAFKA_TOPIC_VDA5050_STATE=${KAFKA_TOPIC_VDA5050_STATE:-vda5050-state}
+      - KAFKA_TOPIC_FLEET_FEATURES=${KAFKA_TOPIC_FLEET_FEATURES:-fleet-features}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
+      - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
+      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
+      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
+      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
+      - PROCESSING_INTERVAL_SILVER=${PROCESSING_INTERVAL_SILVER:-3 seconds}
+    command: >
+      /opt/spark/bin/spark-submit
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
+      --master local[*]
+      /opt/spark/src/jobs/fleet_features_writer.py
+
+  spark-maintenance:
+    image: apache/spark:3.5.0
+    restart: unless-stopped
+    depends_on:
+      spark-vda5050-state:
+        condition: service_started
+    networks:
+      - lakehouse-net
+    volumes:
+      - ./src:/opt/spark/src
+    environment:
+      - PYTHONPATH=/opt/spark/src
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
+      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
+      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
+      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
+      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
+      - ICEBERG_GOLD_TABLE=${ICEBERG_GOLD_TABLE:-lakehouse.gold.ai_anomalies}
+      - ICEBERG_TARGET_FILE_SIZE_BYTES=${ICEBERG_TARGET_FILE_SIZE_BYTES:-67108864}
+      - ICEBERG_RETAIN_LAST_SNAPSHOTS=${ICEBERG_RETAIN_LAST_SNAPSHOTS:-2}
+      - MAINTENANCE_TARGET=${MAINTENANCE_TARGET:-all}
+      - MAINTENANCE_POLL_INTERVAL=${MAINTENANCE_POLL_INTERVAL:-300}
+      - MAINTENANCE_SNAPSHOT_THRESHOLD=${MAINTENANCE_SNAPSHOT_THRESHOLD:-600}
+      - MAINTENANCE_SIZE_THRESHOLD_KB=${MAINTENANCE_SIZE_THRESHOLD_KB:-500}
+    command: python3 /opt/spark/src/jobs/maintenance_watcher.py
+
+  spark-anomaly-detector:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    image: spark-inference:0.1.0
+    container_name: spark-anomaly-detector
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      spark-fleet-features:
+        condition: service_started
+      mlflow:
+        condition: service_healthy
+    networks:
+      - redpanda-net
+      - lakehouse-net
+      - ml-net
+    volumes:
+      - ./src:/opt/spark/src
+      - ./tests:/opt/spark/tests:ro
+      - ../../../ml-common:/opt/spark/ml-common:ro
+      - ../../../schema:/opt/spark/schema:ro
+      - ../../../schema:/opt/spark/schemas:ro
+    environment:
+      - PYTHONPATH=/opt/spark/src:/opt/spark/ml-common
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
+      - KAFKA_TOPIC_FLEET_FEATURES=${KAFKA_TOPIC_FLEET_FEATURES:-fleet-features}
+      - KAFKA_TOPIC_AI_ANOMALIES=${KAFKA_TOPIC_AI_ANOMALIES:-ai-anomalies}
+      - KAFKA_STARTING_OFFSETS_INFERENCE=${KAFKA_STARTING_OFFSETS_INFERENCE:-latest}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
+      - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
+      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
+      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
+      - ICEBERG_GOLD_TABLE=${ICEBERG_GOLD_TABLE:-lakehouse.gold.ai_anomalies}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      - MLFLOW_REGISTERED_MODEL_NAME=${MLFLOW_REGISTERED_MODEL_NAME:-agv-gru-autoencoder}
+      - MLFLOW_MODEL_STAGE=${MLFLOW_MODEL_STAGE:-Production}
+      - ANOMALY_WARNING_MULTIPLIER=${ANOMALY_WARNING_MULTIPLIER:-2.0}
+      - ANOMALY_THRESHOLD_MULTIPLIER=${ANOMALY_THRESHOLD_MULTIPLIER:-4.0}
+      - PROCESSING_INTERVAL_INFERENCE=${PROCESSING_INTERVAL_INFERENCE:-1 second}
+    command: >
+      spark-submit
+      --conf spark.jars.ivy=/tmp/.ivy2
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
+      --master local[*]
+      /opt/spark/src/jobs/anomaly_detector.py
+
+networks:
+  redpanda-net:
+  lakehouse-net:
+  ml-net:

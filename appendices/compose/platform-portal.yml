@@ -1,0 +1,29 @@
+# Platform Services Portal & Health Supervision Dashboard.
+#
+# Part of the main stack: `docker compose up -d` from the repository root starts it.
+#
+# Probes HTTP/TCP health endpoints across all stack networks and serves
+# the Platform Services Hub web interface on port 8080.
+
+services:
+  platform-portal:
+    image: platform-portal:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      WEB_PORT: "8080"
+      NODERED_PORT: ${NODERED_PORT:-1880}
+      DIGITAL_TWIN_PORT: ${DIGITAL_TWIN_PORT:-8090}
+    volumes:
+      # Backend code mounted for development convenience.
+      - ./backend/app:/app/app:ro
+    networks:
+      - mqtt-net
+      - redpanda-net
+      - questdb-net
+      - lakehouse-net
+      - ml-net
+    restart: unless-stopped

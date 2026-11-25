@@ -73,7 +73,7 @@ To achieve this overarching goal, the project is structured into five specific t
     To process raw telemetry streams before they reach downstream machine learning components, Apache Spark\cite{apache_spark} is used to ingest raw streams, cleanse null fields, append ingestion timestamps, and standardize data structures. Cleaned events are to be published to a Redpanda\cite{redpanda} event broker. This Kafka-compatible streaming layer decouples system modules, allowing independent producers and consumers to interact seamlessly.
 
     \item \textbf{Data Lakehouse and Medallion Architecture\cite{dey2026lakehouse}:} 
-    To ensure scalable, long-term persistence, a Data Lakehouse paradigm is adopted. It combines the cost-effective storage of object repositories (S3-compatible Garage bucket\cite{garage}) with the structured, ACID-compliant query capabilities of Apache Iceberg\cite{apache_iceberg}. Data is to be organized following a Medallion Architecture:
+    To ensure scalable, long-term persistence, a Data Lakehouse paradigm is adopted. It combines the cost-effective storage of object repositories (S3-compatible MinIO\cite{minio}) with the structured, ACID-compliant query capabilities of Apache Iceberg\cite{apache_iceberg}. Data is to be organized following a Medallion Architecture:
     \begin{itemize}
         \item \textbf{Bronze Layer:} To store raw, unprocessed telemetry streams exactly as received.
         \item \textbf{Silver Layer:} To contain cleaned, validated, and enriched data with added ingestion metadata.
@@ -118,7 +118,7 @@ Furthermore, the operational scope of this project is subject to several specifi
 \section{Document structure}
 \label{sec:document_structure}
 
-This document is organized into eight main chapters, including this introductory chapter, followed by two supplementary appendices that provide practical guides for system deployment and operation:
+This document is organized into eight main chapters, including this introductory chapter, followed by three supplementary appendices that provide practical guides for system deployment and operation, together with the deployment files and the simulator specification:
 
 \begin{enumerate}
     \item \textbf{Introduction (Chapter~\ref{chap:introduction}):} Provides an overview of the industrial motivation within Industry~4.0 and autonomous mobile robotics, formalizes the overarching and specific technical objectives of the project, establishes the industrial collaboration with EDAG and the Metys project, delimits the operational scope and constraints, details the hybrid software engineering methodology (combining plan-driven design with agile Scrum sprints), and outlines the structural organization of this work.
@@ -127,15 +127,15 @@ This document is organized into eight main chapters, including this introductory
     
     \item \textbf{State of the Art (Chapter~\ref{chap:state_of_the_art}):} Establishes the theoretical foundation and literature review supporting this research, covering deep anomaly detection paradigms, recurrent autoencoder architectures (GRU-AE), explainable root-cause analysis via residual decomposition, physics-informed synthetic telemetry generation, and scalable real-time Data Lakehouse paradigms structured around the Medallion architecture and Apache Iceberg.
     
-    \item \textbf{Requirements Analysis and Specification (Chapter~\ref{chap:requirements_analysis}):} Need to be done.
+    \item \textbf{Requirements Analysis and Specification (Chapter~\ref{chap:requirements_analysis}):} States the functional and non-functional requirements of the platform, and illustrates the main interactions with use cases and sequence diagrams.
     
-    \item \textbf{System Architecture Design (Chapter~\ref{chap:system_architecture}):} Need to be done.
+    \item \textbf{System Architecture Design (Chapter~\ref{chap:system_architecture}):} Presents the design of the streaming platform, from the simulated fleet and the event bus through the lakehouse, the anomaly-detection model, and the dashboards, together with the utilities used to run a factory scenario.
     
-    \item \textbf{System Implementation (Chapter~\ref{chap:system_implementation}):} Need to be done.
+    \item \textbf{System Implementation (Chapter~\ref{chap:system_implementation}):} Describes how each layer is built and deployed, including the containers, the simulator, the streaming jobs, storage, training and inference, the dashboards, and the supporting utilities.
     
-    \item \textbf{Testing and Evaluation (Chapter~\ref{chap:testing_evaluation}):} Need to be done.
+    \item \textbf{Testing and Evaluation (Chapter~\ref{chap:testing_evaluation}):} Reports the validation of the simulator physics and a sustained run of the data pipeline. The evaluation of the detector itself remains to be written.
     
-    \item \textbf{Conclusions and Future Work (Chapter~\ref{chap:conclusions}):} Synthesizes the achieved results and key findings relative to the initial technical objectives, reviews lessons learned from the industrial collaboration, and outlines prospective lines of future research and technical enhancements.
+    \item \textbf{Conclusions and Future Work (Chapter~\ref{chap:conclusions}):} The synthesis of the results is left to be written with the final evaluation. The chapter already records the future work on central authentication, encrypted communications, and a deployment on Kubernetes.
     
-    \item \textbf{Appendices (Appendices~\ref{app:installation_manual} and~\ref{app:user_manual}):} Contain supporting operational documentation, comprising Appendix~\ref{app:installation_manual} (Installation Manual), which details environment prerequisites, container orchestration, and deployment steps, and Appendix~\ref{app:user_manual} (User Manual), which provides instructions for sending orders and instant actions, simulating anomalies, monitoring Grafana dashboards, and inspecting real-time telemetry.
+    \item \textbf{Appendices (Appendices~\ref{app:installation_manual}, \ref{app:user_manual}, and~\ref{app:deployment}):} Contain supporting operational documentation. Appendix~\ref{app:installation_manual} (Installation Manual) details environment prerequisites and the commands that start the stack. Appendix~\ref{app:user_manual} (User Manual) explains how to watch the factory, inject a fault, read the dashboards, and promote a model. Appendix~\ref{app:deployment} reproduces the Docker Compose files and the specification used to extend the simulator.
 \end{enumerate}

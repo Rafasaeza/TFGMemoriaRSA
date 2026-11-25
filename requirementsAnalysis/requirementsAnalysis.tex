@@ -2,3 +2,281 @@
 \chapter{Requirements Analysis and Specification}
 \label{chap:requirements_analysis}
 
+The requirements of the platform were fixed at the start of the project with the industrial partner, before the architecture was designed. This chapter records that catalogue. A functional requirement states a behaviour the system must provide. A non-functional requirement states a quality the system must satisfy while providing those behaviours. Each entry names the quality it relates to, a stable identifier, a title, the requirement statement, and its priority. Every requirement in this catalogue has priority \textbf{CORE}: it belongs to the agreed scope of the work. The use cases and sequence diagrams in this chapter show how those requirements are exercised. Architectural constraints are specified separately.
+
+\newcommand{\reqtable}[5]{%
+  \noindent
+  \begin{tabularx}{\linewidth}{@{}>{\bfseries\raggedright\arraybackslash}p{3.2cm} X@{}}
+    \toprule
+    Related to & #1 \\
+    Requirement ID & \texttt{#2} \\
+    Title & #3 \\
+    Description & #4 \\
+    Priority & #5 \\
+    \bottomrule
+  \end{tabularx}%
+  \par\vspace{0.9em}%
+}
+
+\section{Functional Requirements}
+\label{sec:functional_requirements}
+
+Functional requirements describe what the platform must do with industrial telemetry, from ingestion to anomaly detection and visualization.
+
+\reqtable{data ingestion}{FR-01}{Telemetry Ingestion}{The system shall be capable of receiving continuous streams of telemetry data from industrial devices.}{CORE}
+
+\reqtable{interoperability}{FR-02}{Multi-Robot Support}{The system shall be capable of processing telemetry data originating from autonomous mobile robots (AMRs), automated guided vehicles (AGVs), and collaborative robots (cobots).}{CORE}
+
+\reqtable{testability}{FR-03}{Data Simulation}{The system shall provide a mechanism for generating simulated telemetry data for development, testing, and validation purposes.}{CORE}
+
+\reqtable{data processing}{FR-04}{Data Processing}{The system shall support the processing and transformation of telemetry data before storage or consumption.}{CORE}
+
+\reqtable{machine learning}{FR-05}{Feature Engineering}{The system shall support the generation and calculation of derived features for machine learning applications.}{CORE}
+
+\reqtable{anomaly detection}{FR-06}{Anomaly Detection}{The system shall detect anomalous behavior from incoming telemetry data.}{CORE}
+
+\reqtable{anomaly detection}{FR-07}{Known Anomaly Classification}{The system shall allow detected anomalies to be classified as predefined known anomaly types.}{CORE}
+
+\reqtable{observability}{FR-08}{Alert Generation}{The system shall generate alerts when known anomalies are detected.}{CORE}
+
+\reqtable{persistence}{FR-09}{Historical Data Storage}{The system shall store telemetry data to enable historical analysis and traceability.}{CORE}
+
+\reqtable{traceability}{FR-10}{Historical Data Access}{The system shall provide access to historical telemetry data for analysis and investigation purposes.}{CORE}
+
+\reqtable{observability}{FR-11}{Data Visualization}{The system shall provide visualization capabilities for telemetry data, detected anomalies, and system metrics.}{CORE}
+
+\reqtable{interoperability}{FR-12}{VDA 5050 Compatibility}{The system shall support the exchange of data using the VDA 5050 message format where applicable.}{CORE}
+
+\section{Non-Functional Requirements}
+\label{sec:nonfunctional_requirements}
+
+Non-functional requirements constrain how the functional behaviour is built and operated. They cover the structure of the software, its ability to grow, and the qualities required to evaluate and maintain the anomaly detector.
+
+\reqtable{maintainability}{NFR-01}{Modularity}{The system shall follow a modular architecture that enables independent development, maintenance, and reuse of its components.}{CORE}
+
+\reqtable{scalability}{NFR-02}{Scalability}{The system shall be capable of handling increasing telemetry workloads without requiring significant architectural modifications.}{CORE}
+
+\reqtable{portability}{NFR-03}{Portability}{The system shall be deployable across different computing environments and operating systems.}{CORE}
+
+\reqtable{reliability}{NFR-04}{Data Persistence}{The system shall ensure the reliable persistence of processed telemetry data.}{CORE}
+
+\reqtable{traceability}{NFR-05}{Historical Traceability}{The system shall support access to historical versions of stored data when required.}{CORE}
+
+\reqtable{extensibility}{NFR-06}{Extensibility}{The system shall allow the incorporation of new robot types, telemetry sources, and processing modules with minimal changes to the existing architecture.}{CORE}
+
+\reqtable{testability}{NFR-07}{Model Evaluation Capability}{The system shall support the evaluation of anomaly detection models using Detection Rate, False Positive Rate, and Detection Lead Time.}{CORE}
+
+\reqtable{maintainability}{NFR-08}{Maintainability}{The system shall allow individual components to be updated, replaced, or extended with minimal impact on the rest of the system.}{CORE}
+
+\reqtable{maintainability and extensibility}{NFR-09}{Maintainable Software Design}{The system shall be implemented following established software engineering principles, including SOLID, DRY, KISS, and Separation of Concerns. The overall architecture shall follow an Event-Driven Architecture, so that components stay modular, maintainable, extensible, and loosely coupled.}{CORE}
+
+\section{Use Cases}
+\label{sec:use_cases}
+
+Four actors stand outside the platform. The \textbf{fleet} is an AGV or AMR that publishes its state. The \textbf{simulator} stands in for that fleet during development and produces the same kind of state message. The \textbf{operator} watches the fleet and investigates anomalies. The \textbf{ML engineer} trains and evaluates the detector. A dashed arrow marked \texttt{<<include>>} means the source use case is not complete without the target.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+      uc/.style={ellipse, draw, fill=white, align=center, font=\footnotesize,
+                 inner sep=1pt, text width=2.45cm, minimum height=0.95cm},
+      include/.style={dashed, -{Stealth[open]}, shorten >=1pt, shorten <=1pt},
+      assoc/.style={draw},
+      ilab/.style={font=\scriptsize, fill=white, inner sep=1pt},
+      stick/.pic={
+        \draw (0,0) circle[radius=0.16];
+        \draw (0,-0.16) -- (0,-0.62);
+        \draw (-0.28,-0.34) -- (0.28,-0.34);
+        \draw (0,-0.62) -- (-0.22,-0.98);
+        \draw (0,-0.62) -- (0.22,-0.98);
+      }
+    ]
+    \draw[thick] (2.7,0.2) rectangle (14.5,13.3);
+    \node[anchor=north, font=\bfseries\footnotesize] at (8.6,13.15)
+      {Anomaly detection platform};
+
+    % Ingestion chain, one column, so include arrows stay vertical.
+    \node[uc] (uc2) at (4.7,11.7) {UC-02\\Simulate telemetry};
+    \node[uc] (uc1) at (4.7,9.5) {UC-01\\Ingest telemetry};
+    \node[uc] (uc3) at (4.7,7.3) {UC-03\\Engineer features};
+    \node[uc] (uc5) at (4.7,5.1) {UC-05\\Detect anomalies};
+    \node[uc] (uc6) at (4.7,2.9) {UC-06\\Classify anomaly};
+
+    \node[uc] (uc4) at (8.6,9.5) {UC-04\\Store history};
+    \node[uc] (uc8) at (12.2,9.5) {UC-08\\Visualize operations};
+    \node[uc] (uc9) at (12.2,7.3) {UC-09\\Inspect history};
+    \node[uc] (uc7) at (12.2,2.9) {UC-07\\Raise alert};
+    \node[uc] (uc10) at (8.6,0.9) {UC-10\\Train model};
+    \node[uc] (uc11) at (12.2,0.9) {UC-11\\Evaluate model};
+
+    \pic (fleet) at (0.9,10.1) {stick};
+    \node[align=center, font=\footnotesize, anchor=north] (fleetlab) at (0.9,8.9) {Fleet};
+    \pic (sim) at (0.9,12.3) {stick};
+    \node[align=center, font=\footnotesize, anchor=north] (simlab) at (0.9,11.1) {Simulator};
+    \pic (op) at (15.9,9.0) {stick};
+    \node[align=center, font=\footnotesize, anchor=north] (oplab) at (15.9,7.8) {Operator};
+    \pic (ml) at (15.9,1.5) {stick};
+    \node[align=center, font=\footnotesize, anchor=north] (mllab) at (15.9,0.3) {ML engineer};
+
+    \draw[assoc] (fleetlab.east) -- (uc1.west);
+    \draw[assoc] (simlab.east) -- (uc2.west);
+    \draw[assoc] (oplab.west) -- (uc8.east);
+    \draw[assoc] (oplab.west) -- (uc9.east);
+    \draw[assoc] (oplab.south) -- (15.35,2.9) -- (uc7.east);
+    \draw[assoc] (mllab.west) -- (uc11.east);
+    \draw[assoc] (mllab.west) -- (uc10.east);
+
+    \draw[include] (uc2) -- (uc1) node[ilab, midway, right] {include};
+    \draw[include] (uc1) -- (uc4) node[ilab, midway, above] {include};
+    \draw[include] (uc1) -- (uc3) node[ilab, midway, right] {include};
+    \draw[include] (uc3) -- (uc5) node[ilab, midway, right] {include};
+    \draw[include] (uc5) -- (uc6) node[ilab, midway, right] {include};
+    \draw[include] (uc6) -- (uc7) node[ilab, midway, above] {include};
+    \draw[include] (uc10) -- (uc9) node[ilab, midway, above, sloped] {include};
+    \draw[include] (uc11) -- (uc9) node[ilab, midway, right] {include};
+  \end{tikzpicture}%
+  }
+  \caption{Use cases of the anomaly detection platform. Dashed arrows are \texttt{<<include>>} dependencies.}
+  \label{fig:use-cases}
+\end{figure}
+
+Table~\ref{tab:use-case-trace} traces each use case to the actor who initiates it and to the requirements it covers. Included use cases are initiated by the actor of the including use case.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Use cases, primary actors, and related requirements.}
+  \label{tab:use-case-trace}
+  \begin{tabularx}{\linewidth}{@{}l X l l@{}}
+    \toprule
+    \textbf{ID} & \textbf{Use case} & \textbf{Actor} & \textbf{Requirements} \\
+    \midrule
+    UC-01 & Ingest telemetry & Fleet & FR-01, FR-02, FR-12 \\
+    UC-02 & Generate simulated telemetry & Simulator & FR-03 \\
+    UC-03 & Engineer features & Fleet & FR-04, FR-05 \\
+    UC-04 & Store historical telemetry & Fleet & FR-09 \\
+    UC-05 & Detect anomalies & Fleet & FR-06 \\
+    UC-06 & Classify anomaly & Fleet & FR-07 \\
+    UC-07 & Raise anomaly alert & Operator & FR-08 \\
+    UC-08 & Visualize operations & Operator & FR-11 \\
+    UC-09 & Inspect historical data & Operator, ML engineer & FR-10, NFR-05 \\
+    UC-10 & Train anomaly model & ML engineer & FR-06 \\
+    UC-11 & Evaluate detection model & ML engineer & NFR-07 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Sequence Diagrams}
+\label{sec:sequence_diagrams}
+
+The sequence diagrams follow the three collaborations that realize the use cases: bringing a vehicle state into the platform, scoring that stream while it is live, and producing the model that the scoring step loads. Messages are asynchronous except where a participant waits for a result.
+
+\subsection{Telemetry ingestion}
+\label{subsec:sd-ingestion}
+
+UC-01, UC-02, UC-03, and UC-04 share one path. The simulator is shown because it is the fleet source used in this project. A real vehicle would publish the same VDA~5050 state to the broker.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[>=stealth, font=\footnotesize]
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (sim) at (0,0) {Simulator};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (mqtt) at (3.1,0) {MQTT broker};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (tg) at (6.2,0) {Telegraf};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (rp) at (9.3,0) {Redpanda};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (sp) at (12.4,0) {Spark};
+
+    \foreach \p in {sim,mqtt,tg,rp,sp}
+      \draw[dashed] (\p.south) -- (\p.south |- 0,-7.4);
+
+    \draw[->] (sim.south |- 0,-1.3) -- (mqtt.south |- 0,-1.3)
+      node[midway, above, font=\scriptsize] {VDA 5050 state};
+    \draw[->] (mqtt.south |- 0,-2.3) -- (tg.south |- 0,-2.3)
+      node[midway, above, font=\scriptsize] {deliver state};
+    \draw[->] (tg.south |- 0,-3.3) -- (rp.south |- 0,-3.3)
+      node[midway, above, font=\scriptsize] {\texttt{vda5050-state}};
+    \draw[->] (rp.south |- 0,-4.3) -- (sp.south |- 0,-4.3)
+      node[midway, above, font=\scriptsize] {micro-batch};
+    \draw[->] (sp.south |- 0,-5.2) -- ++(0.85,0) -- ++(0,-0.55)
+      node[midway, right, font=\scriptsize, align=left] {append Bronze\\and Silver} -- ++(-0.85,0);
+    \draw[->] (sp.south |- 0,-6.5) -- (rp.south |- 0,-6.5)
+      node[midway, above, font=\scriptsize] {\texttt{fleet-features}};
+  \end{tikzpicture}%
+  }
+  \caption{Ingestion of a vehicle state, persistence in the lakehouse, and publication of curated features.}
+  \label{fig:sd-ingestion}
+\end{figure}
+
+\subsection{Real-time anomaly scoring}
+\label{subsec:sd-inference}
+
+UC-05, UC-06, UC-07, and UC-08 continue from the feature topic. The inference job loads the production model, scores the windows, and publishes the result. The operator does not call the model. The operator reads the alert through the dashboard.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[>=stealth, font=\footnotesize]
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (rp) at (0,0) {Redpanda};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (inf) at (3.15,0) {Inference};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (mlf) at (6.3,0) {MLflow};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (qdb) at (9.45,0) {QuestDB};
+    \node[draw, align=center, minimum width=2.05cm, minimum height=0.75cm] (gf) at (12.6,0) {Grafana};
+
+    \foreach \p in {rp,inf,mlf,qdb,gf}
+      \draw[dashed] (\p.south) -- (\p.south |- 0,-8.6);
+
+    \draw[->] (rp.south |- 0,-1.2) -- (inf.south |- 0,-1.2)
+      node[midway, above, font=\scriptsize] {\texttt{fleet-features}};
+    \draw[->] (inf.south |- 0,-2.2) -- (mlf.south |- 0,-2.2)
+      node[midway, above, font=\scriptsize] {resolve production};
+    \draw[->] (mlf.south |- 0,-3.2) -- (inf.south |- 0,-3.2)
+      node[midway, above, font=\scriptsize] {model and scaler};
+    \draw[->] (inf.south |- 0,-4.1) -- ++(0.9,0) -- ++(0,-0.7)
+      node[midway, right, font=\scriptsize, align=left] {window, scale,\\classify} -- ++(-0.9,0);
+    \draw[->] (inf.south |- 0,-5.6) -- (rp.south |- 0,-5.6)
+      node[midway, above, font=\scriptsize] {\texttt{ai-anomalies}};
+    \draw[->] (rp.south |- 0,-6.6) -- (qdb.south |- 0,-6.6)
+      node[midway, above, font=\scriptsize] {Kafka Connect};
+    \draw[->] (gf.south |- 0,-7.6) -- (qdb.south |- 0,-7.6)
+      node[midway, above, font=\scriptsize] {query scores};
+  \end{tikzpicture}%
+  }
+  \caption{Live scoring of \texttt{fleet-features} and delivery of the result to the operator dashboard.}
+  \label{fig:sd-inference}
+\end{figure}
+
+\subsection{Model training and promotion}
+\label{subsec:sd-training}
+
+UC-09, UC-10, and UC-11 are the offline path. The engineer reads a Silver snapshot, and the training run registers a new model version. Scoring picks up that version only after it is marked for production.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\linewidth}{!}{%
+  \begin{tikzpicture}[>=stealth, font=\footnotesize]
+    \node[draw, align=center, minimum width=2.2cm, minimum height=0.75cm] (eng) at (0,0) {ML engineer};
+    \node[draw, align=center, minimum width=2.2cm, minimum height=0.75cm] (trn) at (3.6,0) {Training};
+    \node[draw, align=center, minimum width=2.2cm, minimum height=0.75cm] (ice) at (7.2,0) {Iceberg};
+    \node[draw, align=center, minimum width=2.2cm, minimum height=0.75cm] (mlf) at (10.8,0) {MLflow};
+
+    \foreach \p in {eng,trn,ice,mlf}
+      \draw[dashed] (\p.south) -- (\p.south |- 0,-7.6);
+
+    \draw[->] (eng.south |- 0,-1.3) -- (trn.south |- 0,-1.3)
+      node[midway, above, font=\scriptsize] {start run};
+    \draw[->] (trn.south |- 0,-2.3) -- (ice.south |- 0,-2.3)
+      node[midway, above, font=\scriptsize] {read Silver snapshot};
+    \draw[->] (ice.south |- 0,-3.3) -- (trn.south |- 0,-3.3)
+      node[midway, above, font=\scriptsize] {\texttt{fleet\_features}};
+    \draw[->] (trn.south |- 0,-4.2) -- ++(0.95,0) -- ++(0,-0.7)
+      node[midway, right, font=\scriptsize, align=left] {window, scale,\\train} -- ++(-0.95,0);
+    \draw[->] (trn.south |- 0,-5.7) -- (mlf.south |- 0,-5.7)
+      node[midway, above, font=\scriptsize] {register version};
+    \draw[->] (eng.south |- 0,-6.7) -- (mlf.south |- 0,-6.7)
+      node[midway, above, font=\scriptsize] {promote production};
+  \end{tikzpicture}%
+  }
+  \caption{Offline training on the Silver history and promotion of the model used for live scoring.}
+  \label{fig:sd-training}
+\end{figure}

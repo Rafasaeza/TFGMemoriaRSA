@@ -1,0 +1,66 @@
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.12
+    hostname: redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+    ports:
+      - 19092:19092
+      - 19644:9644
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks:
+      - redpanda-net
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v3.8.0
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    ports:
+      - 9080:8080
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - redpanda-net
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.12
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        rpk topic create vda5050-state --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create fleet-features --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create ai-anomalies --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - redpanda-net
+
+volumes:
+  redpanda-data:

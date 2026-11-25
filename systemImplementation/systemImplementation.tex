@@ -37,46 +37,21 @@ To improve maintainability and modularity, the platform is organized as a collec
 
 This approach allows each subsystem to be developed and deployed independently while preserving a unified deployment strategy for the complete platform. 
 
-Listing~\ref{lst:main-compose} shows the complete root Docker Compose configuration used to orchestrate all subsystems, define CA certificates, and declare shared network boundaries.
+Listing~\ref{lst:main-compose} in Appendix~\ref{sec:app_compose} is the root file. It includes one Compose file per subsystem, mounts the partner certificate, and declares the bridge networks. The remaining listings of that appendix are the service files themselves.
 
-\begin{lstlisting}[language=yaml, caption={Root Docker Compose configuration}, label={lst:main-compose}, basicstyle=\ttfamily\small, breaklines=true]
-secrets:
-  ca_cert:
-    file: ./certs/edag-r1.crt
-
-include:
-  - docker/mqtt-broker/docker-compose.yml
-  - docker/source_systems/vda5050_vehicle_simulator/docker-compose.yml
-  - docker/redpanda/docker-compose.yml
-  - docker/source_systems/telegraf/docker-compose.yml
-  - docker/data-storage/questdb/docker-compose.yml
-  - docker/cross-cutting/docker-compose.yml
-  - docker/utils/sim-control-panel/docker-compose.yml
-  - docker/stream-processing/spark/docker-compose.yml
-  - docker/data-lakehouse/minio/docker-compose.yml
-
-networks:
-  lakehouse-net:
-    driver: bridge
-  redpanda-net:
-    driver: bridge
-  mqtt-net:
-    driver: bridge
-  questdb-net:
-    driver: bridge
-\end{lstlisting}
 
 \subsection{Network Segmentation} 
 Dedicated Docker bridge networks were created to isolate communication between system components. Rather than exposing every service to a common network, individual networks were assigned according to the communication requirements of each layer. 
 
 This strategy reduces unnecessary connectivity between containers and simplifies service discovery. Furthermore, it follows the principle of least privilege by restricting access only to the services required by each component. 
 
-The platform defines four segmented bridge networks:
+The platform defines five segmented bridge networks:
 \begin{itemize}
-    \item \texttt{mqtt-net}: Dedicated to edge communication between simulated AGVs, the Eclipse Mosquitto broker, and the Telegraf ingestion agent.
+    \item \texttt{mqtt-net}: Dedicated to edge communication between simulated AGVs, the Eclipse Mosquitto broker, the Telegraf ingestion agent, and the factory utilities that speak MQTT.
     \item \texttt{redpanda-net}: Connects the central distributed event streaming brokers, Telegraf producer, Spark streaming consumers, and Kafka Connect.
-    \item \texttt{lakehouse-net}: Dedicated to the analytical storage tier, connecting Spark stream processing with the MinIO S3 object store.
+    \item \texttt{lakehouse-net}: Dedicated to the analytical storage tier, connecting Spark stream processing with the MinIO S3 object store and with the training reader.
     \item \texttt{questdb-net}: Isolates the operational time-series database, schema initialization containers, Kafka Connect sink, and Grafana monitoring dashboards.
+    \item \texttt{ml-net}: Connects the MLflow tracking server, the training container, and the inference job that resolves the production model.
 \end{itemize}
 
 \subsection{Modular Service Configuration}\label{subsec:modular-service-configuration}
@@ -110,27 +85,41 @@ This section describes the implementation of the source systems layer, the origi
 
 The source system layer is currently implemented using a modified version of the \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050}. The simulator executes inside a dedicated container and connects to the MQTT broker through the shared \texttt{mqtt-net} network. 
 
-The \texttt{depends\_on} directive combined with Docker health checks guarantees that the simulator starts only after the broker has become available. 
+The service file is Listing~\ref{lst:vda5050-simulator-docker-compose}. The \texttt{depends\_on} directive combined with Docker health checks guarantees that the simulator starts only after the broker has become available. Listing~\ref{lst:simulator-override} adds the build context used in this repository. 
 
-\begin{lstlisting}[language=yaml, caption={VDA5050 Simulator Docker Compose}, label={lst:vda5050-simulator-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
-services:
-  simulator:
-    image: vda5050-vehicle-simulator:latest
-    volumes:
-      - ./config.toml:/app/config.toml:ro
-    networks:
-      - mqtt-net
-    depends_on:
-      mosquitto:
-        condition: service_healthy
-    restart: unless-stopped
-\end{lstlisting}
 
 The simulator configuration is loaded from a dedicated configuration file that defines fleet parameters, MQTT communication settings, and telemetry generation properties. During execution, each simulated AGV periodically publishes VDA 5050-compliant state messages to the MQTT broker. 
 
 To support the anomaly detection use case, the original simulator was extended with additional telemetry channels representing motor, battery, and drivetrain behavior. These extensions enable the generation of realistic training data for machine learning workloads while preserving compatibility with the VDA 5050 communication standard.
 
 To provide physically consistent telemetry for anomaly recognition, the kinematic simulation of the automated guided vehicle (AGV) is extended with an electromechanical powertrain model. The objective is not to replicate every microscopic effect of a physical robot, but to capture the dominant coupling between trajectory demands, mechanical loads, electrical responses, and thermal dissipation.
+
+Figure~\ref{fig:agv-simulated-sensors} places the instruments that this model publishes, so the equations below can be read against the part of the vehicle they describe. The battery pack and the traction motor are separate nodes of one differential-drive chassis, with a single motor commanded at the outer wheel. On the pack, a Hall sensor on the output cable reads the battery current, the terminal posts read the battery voltage, and a thermistor between the cells reads the pack temperature. On the drive, a second Hall sensor on the armature DC link reads the motor current, the motor terminals read the armature voltage, a probe in the copper windings reads the stator temperature, and a toothed ring on the motor shaft reads the rotor speed. An accelerometer on the motor housing reads the vibration RMS (\texttt{vibration\_rms}, in mm/s). While the bearing is healthy and the rotor is free, that reading tracks rotor speed, about $1.5\,\mathrm{mm/s}$ at the $1\,\mathrm{m/s}$ cruise, and it falls to zero when the shaft is stopped. Torque, mechanical power and back-EMF are computed from those states. They are not additional probes. State of charge and state of health remain on the standard VDA~5050 \texttt{batteryState} object.
+
+On a vehicle the housing accelerometer is the one instrument that is not slow. Bearing impacts and gear-mesh vibration sit between a few hundred hertz and a few kilohertz, and the card that reads them samples at several kilohertz. A condition-monitoring system does not archive that waveform. It reduces it to a broadband velocity RMS in millimetres per second, the severity quantity of ISO~20816, integrated over about one second and then trended slowly. The simulator already publishes one VDA~5050 state every $1.05\,\mathrm{s}$, and every later stage of the platform keeps that rate, so a kilohertz series would not change any stored sample. The same reason given below for neglecting $L_a dI_m/dt$, a transient much shorter than the reporting period, applies here. The model therefore emits the RMS itself. Each $1\,\mathrm{ms}$ electrical sub-step evaluates
+\begin{equation}
+    v_{\mathrm{rms}}(t)
+    =
+    |\omega_m(t)|\, a_{\mathrm{vib}}
+    \left(1 + k_b \tau_b + k_g \tau_g\right)
+    \max\!\left(0,\, 1 - k_w \Delta C_{rr}\right)
+    +
+    \begin{cases}
+        a_{\mathrm{stall}} \max(I_m, 0) & \text{if the wheel is locked},\\
+        0 & \text{otherwise,}
+    \end{cases}
+    \label{eq:vibration_rms}
+\end{equation}
+and the state message copies the last sub-step, then adds Gaussian transducer noise with $\sigma = 0.02\,\mathrm{mm/s}$. The published RMS is a sample of the plant, as the motor current is, not a one-second average computed inside the simulator. On a cruise the plant is steady, so the two coincide. Here $\tau_b$ and $\tau_g$ are the bearing and gearbox friction torques, and $\Delta C_{rr}$ is the fraction removed from the new-tyre rolling resistance. The gain $a_{\mathrm{vib}} = 0.015\,\mathrm{mm/s}$ per rad/s places a healthy $1\,\mathrm{m/s}$ cruise, $|\omega_m| \approx 100\,\mathrm{rad/s}$, near $1.5\,\mathrm{mm/s}$. Bearing friction weights that baseline by $k_b = 3.0$ per N·m, so $0.35\,\mathrm{N\cdot m}$ about doubles the cruise reading. Gearbox friction weights it by $k_g = 0.35$ per N·m, about $+30\,\%$ at $0.85\,\mathrm{N\cdot m}$, and stays below the bearing. Wheel wear multiplies the rotating term by $(1 - k_w \Delta C_{rr})$ with $k_w = 0.50$, so the $0.20$ tread-loss cap is about $10\,\%$ quieter. While the wheel is locked, $\omega_m = 0$ and only the second term remains: $a_{\mathrm{stall}} = 0.015\,\mathrm{mm/s}$ per ampere, about $0.9\,\mathrm{mm/s}$ at the $60\,\mathrm{A}$ drive limit. Pack resistance does not enter. Bearing-pass frequencies and the gear-mesh line are absent. The slow signature that the one-hertz sample can still show is the $0.3\,\mathrm{Hz}$ speed wobble of a worn bearing.
+
+The same figure marks the parts a fault is allowed to change. These marks are not extra instruments. Gearbox degradation adds friction at the reduction gears and lifts the housing vibration by the smaller $k_g$ term of Equation~\eqref{eq:vibration_rms}. Bearing degradation adds friction on the motor-shaft bearing, a small speed wobble, and the larger $k_b$ rise above the speed line. Wheel wear lowers the rolling resistance of the driven tyre, so the same cruise draws less current and the housing is slightly quieter. A mechanical stall locks that wheel: the rotating term disappears and the current-proportional hum remains. Battery state-of-health degradation raises the internal resistance of the pack and leaves the vibration channel unchanged. Section~\ref{subsec:fault_injection} states how each of these disturbances enters the equations.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\linewidth]{agvSimulatedSensors.jpg}
+  \caption{Simulated instruments and fault sites on the vehicle. Battery current, terminal voltage and cell temperature are read on the pack. Motor current, armature voltage, stator temperature, shaft speed and housing vibration are read on the single traction drive. The gearbox, the shaft bearing and the driven wheel are the mechanical parts a fault can change. Torque, power and back-EMF are computed and have no probe.}
+  \label{fig:agv-simulated-sensors}
+\end{figure}
 
 \subsection{Motor and Drivetrain Dynamics}
 
@@ -165,13 +154,32 @@ where $J_m$ is rotor inertia, $B_m$ viscous friction, $\eta_g$ gearbox efficienc
 \end{equation}
 where $m_{\mathrm{total}} = m_{\mathrm{chassis}} + m_{\mathrm{payload}}$ is the total vehicle mass.
 
-\subsection{Drivetrain Kinematics}
+\subsection{Chassis Motion and Drivetrain Kinematics}
 
-The kinematic relationship between the electric motor angular velocity $\omega_m(t)$ and linear vehicle ground speed $v(t)$ is governed by the transmission reduction ratio $i_g$ and the nominal wheel radius $r_w$:
+The mission layer moves the vehicle as a differential-drive chassis. The velocity published in the VDA~5050 \texttt{velocity} object is the body frame, and it is not the rotor speed $\omega_m$ of the motor model above. Lateral velocity is identically zero: the chassis does not sideslip. Forward speed $v_x$ is the ground speed along the heading, and the yaw rate $\omega$ is its own state,
 \begin{equation}
-    v(t) = \frac{\omega_m(t)}{i_g} r_w
+    v_y(t) = 0, \qquad v_x(t) = v_{\mathrm{ground}}(t), \qquad \dot\theta(t) = \omega(t).
+    \label{eq:body_velocity}
 \end{equation}
-which establishes the direct kinematic coupling between the powertrain rotation and chassis linear translation under nominal traction conditions. Wheel wear, defined below, keeps this identity for the wheel speed and scales the ground speed by $(1-s)$.
+Each tick, $\omega$ slews toward a yaw command and never faster than the configured angular acceleration $\alpha = 1\,\mathrm{rad/s^2}$. The command is the largest rate that can still stop inside the remaining heading error $\Delta\theta$ toward the next node, and it is capped at $\omega_{\max} = 1\,\mathrm{rad/s}$:
+\begin{equation}
+    \omega^{\star}(t) = \mathrm{sign}(\Delta\theta)\,
+    \min\!\left(\omega_{\max},\, \sqrt{2\alpha\,|\Delta\theta|}\right).
+    \label{eq:yaw_command}
+\end{equation}
+When $|\Delta\theta| > 0.35\,\mathrm{rad}$ the forward speed is held at zero and the vehicle yaws in place. Below that threshold it drives and trims the heading while moving. A corner of the factory graph is therefore a spot turn of a couple of seconds. On the one-hertz trace, $\omega$ rises and falls; it does not step to $\pm 1\,\mathrm{rad/s}$ in a single sample.
+
+The equivalent motor does not track $v_x$. It tracks the outer wheel of a pair whose track is $b = 0.50\,\mathrm{m}$. The command uses the forward speed $v$ that the mission layer is ramping:
+\begin{equation}
+    v_w(t) = |v(t)| + |\omega(t)|\,\frac{b}{2}.
+    \label{eq:outer_wheel}
+\end{equation}
+The gearbox then closes that wheel speed on the rotor, with reduction $i_g$ and wheel radius $r_w$:
+\begin{equation}
+    v_w(t) = \frac{\omega_m(t)}{i_g}\, r_w.
+    \label{eq:wheel_closure}
+\end{equation}
+Published $v_x$ is the speed made good over the ground. With full traction, $v_x = v$. On a straight cruise $\omega = 0$, so $v_w = v_x$. With $i_g = 10$ and $r_w = 0.10\,\mathrm{m}$, a $1\,\mathrm{m/s}$ cruise puts the rotor near $100\,\mathrm{rad/s}$. During a spot turn $v = 0$ while $v_w = |\omega|\,b/2$, so armature current and \texttt{motor\_speed\_rad\_s} move with the yaw even though the chassis is not translating. Wheel wear, defined below, lowers rolling resistance and leaves both this commanded wheel speed and the ground speed unchanged. A blocked wheel sets both $\omega_m$ and the body yaw to zero, so the rotating term of Equation~\eqref{eq:vibration_rms} collapses.
 
 \subsection{Thermal Dissipation Models}
 
@@ -202,22 +210,22 @@ where open-circuit voltage $V_{\mathrm{ocv}}(SOC)$ scales with state of charge (
     \frac{dSOC(t)}{dt} = -\frac{I_{\mathrm{bat}}(t)}{Q_{\mathrm{nom}}} \cdot 100 \cdot k_{\mathrm{dis}}
     \label{eq:soc_coulomb}
 \end{equation}
-$k_{\mathrm{dis}} = 1$ is the unscaled count. Charging is not multiplied: the charger current is $k_C Q_{\mathrm{nom}}$ at the configured C-rate. The dataset capture uses $k_{\mathrm{dis}} = 20$ and $k_C = 0.5$ ($0.5\mathrm{C}$, about two hours from empty to full). The factor shortens the calendar time of a discharge without changing the current, voltage or temperature that the model publishes. $k_{\mathrm{dis}} = 2$ remains the reference for an unaccelerated shift, about $12\,\%/\mathrm{h}$ and eight hours of continuous driving. At or below $1\,\%$ SoC the drive stops, new orders are rejected and the vehicle publishes a fatal \texttt{BATTERY\_DEPLETED} error until the pack is charged back above that cutoff.
+$k_{\mathrm{dis}} = 1$ is the unscaled count. Charging is not multiplied: the charger current is $k_C Q_{\mathrm{nom}}$ at the configured C-rate $k_C = 0.5$ ($0.5\mathrm{C}$). The factor changes only the slope of state of charge. Current, voltage and temperature stay those of the electrical model. The fleet runs at $k_{\mathrm{dis}} = 2$. Continuous driving then drains the pack at about $12\,\%/\mathrm{h}$, eight hours from full to empty. On the factory duty cycle the current is lower, because a vehicle is not at cruise for the whole shift. A half-hour probe of the five vehicles on 24 November 2026 (11:18--11:48~UTC, after the line warm-up) measured $7.4$ to $10.2\,\%/\mathrm{h}$, with a fleet mean of $8.7\,\%/\mathrm{h}$. The packs started near full charge, so the window contains no docking: $68\,\%$ of the samples are moving and $32\,\%$ are stopped. The orchestrator docks a vehicle at $20\,\%$ and releases it near $100\,\%$. That charge takes about $1.65\,\mathrm{h}$ and, at the measured slope, is about $15\,\%$ of the cycle. An earlier capture used $k_{\mathrm{dis}} = 20$ to compress calendar time. That accelerated trace is not the regime the simulator now publishes, and the scaler fitted on it is replaced when the model is retrained on the unaccelerated shift. The published \texttt{batteryCharge} is rounded to two decimal places. The coulomb counter keeps the unrounded state: at $k_{\mathrm{dis}} = 2$ a typical pack moves less than $0.005\,\%$ between state messages, and writing the rounded value back would erase the discharge. At or below $1\,\%$ SoC the drive stops, new orders are rejected and the vehicle publishes a fatal \texttt{BATTERY\_DEPLETED} error until the pack is charged back above that cutoff.
 
 \paragraph{Omission of the polarization branch ($V_{\mathrm{pol}}$):}
 A complete 1-RC ECM introduces a capacitive polarization branch ($\frac{dV_{\mathrm{pol}}}{dt} = -\frac{V_{\mathrm{pol}}}{R_p C_p} + \frac{I_{\mathrm{bat}}}{C_p}$). This branch is deliberately omitted, and its transfer resistance $R_p$ is folded into $R_{\mathrm{int}}$ ($0.035 + 0.015 = 0.050\,\Omega$). 
 \emph{Justification:} Detailed $R_p/C_p$ parameters cannot be calibrated without dedicated electrochemical pulse tests, and the polarization branch accounts for less than 20\% of total voltage sag. In a purely ohmic model, the load-step response is directly proportional to $I_{\mathrm{bat}} \cdot R_{\mathrm{int}}$, producing a clean, unambiguous signature for battery state-of-health (SOH) degradation without masking other anomalies.
 
 \subsection{Physical Fault Injection and Transducer Emulation}
+\label{subsec:fault_injection}
 
 Rather than injecting synthetic noise into high-level features, faults perturb the physical equations directly:
 \begin{itemize}
-    \item \textbf{Mechanical Stall:} Imposes $\omega_m = 0$, collapsing back-EMF ($E_b = 0$) and causing the current to surge to the drive limit, accompanied by rapid thermal rise and battery voltage sag.
-    \item \textbf{Wheel Wear} (\texttt{wheelWear}): A slip $s$ accumulates over the injection window and then stays. The rotor keeps the commanded speed, while ground speed falls to $(1-s)$ times the wheel speed, so the same route takes longer. The extra rolling resistance raises steady-state current and winding temperature. The drive does not stall.
-    \item \textbf{Bearing Degradation} (\texttt{bearingDegradation}): Shaft friction grows across the injection window and then stays, raising current and temperature. The tracked speed is modulated by a few percent at $0.3\,\mathrm{Hz}$, a wobble that remains visible in the $1\,\mathrm{Hz}$ sample.
-    \item \textbf{Gearbox Degradation:} Injects an additive friction torque $\tau_{\mathrm{friction}}$, increasing steady-state current and operating temperature.
-    \item \textbf{Stator Fault:} Injects harmonic current ripple and multiplies copper Joule heating.
-    \item \textbf{Battery SOH Degradation:} Multiplies $R_{\mathrm{int}}$, producing pronounced voltage drops during acceleration steps.
+    \item \textbf{Mechanical Stall:} Imposes $\omega_m = 0$ and holds the body yaw $\omega$ at zero, because the same wheels produce both. Back-EMF collapses ($E_b = 0$) and the current surges to the drive limit, with a rapid thermal rise and battery voltage sag. In Equation~\eqref{eq:vibration_rms} the rotating term is zero and the locked-rotor hum remains, about $0.9\,\mathrm{mm/s}$ at the $60\,\mathrm{A}$ limit.
+    \item \textbf{Wheel Wear} (\texttt{wheelWear}): A fraction of the new-tyre rolling resistance is removed and then stays, capped at a $20\,\%$ drop. Ground speed and wheel speed are unchanged. The same cruise draws less current because a worn tread rolls more easily, and the rotating vibration falls by about $10\,\%$ at that cap. The drive does not stall.
+    \item \textbf{Bearing Degradation} (\texttt{bearingDegradation}): Shaft friction grows across the injection window and then stays, raising current and temperature. The tracked speed is modulated by a few percent at $0.3\,\mathrm{Hz}$, a wobble that remains visible in the $1\,\mathrm{Hz}$ sample. Housing vibration rises by the $k_b$ term of Equation~\eqref{eq:vibration_rms}, about double at $0.35\,\mathrm{N\cdot m}$. Gearbox friction uses the smaller $k_g$ and does not wobble the shaft, so the two wear modes stay separable on this channel.
+    \item \textbf{Gearbox Degradation:} Injects an additive friction torque $\tau_{\mathrm{friction}}$, increasing steady-state current and operating temperature, and the milder vibration rise of Equation~\eqref{eq:vibration_rms} (about $+30\,\%$ at $0.85\,\mathrm{N\cdot m}$).
+    \item \textbf{Battery SOH Degradation:} Multiplies $R_{\mathrm{int}}$, producing pronounced voltage drops during acceleration steps. It does not enter Equation~\eqref{eq:vibration_rms}.
 \end{itemize}
 
 Finally, physical states are conditioned through transducer models (Gaussian noise, ADC quantization, and thermal/gain drift) to generate realistic diagnostic telemetry for anomaly detection algorithms.
@@ -239,6 +247,7 @@ The physical states computed by the model are serialized into the extended VDA~5
     \item Battery temperature ($T_{bat}$) (\texttt{battery\_temp\_c})
     \item Active fault flag (\texttt{fault\_active})
     \item Active fault types (\texttt{fault\_types})
+    \item Housing vibration RMS (\texttt{vibration\_rms})
 \end{itemize}
 
 These variables were selected because they are commonly used in predictive maintenance, condition monitoring, and fault diagnosis applications for electrically driven industrial vehicles. The two \texttt{fault\_*} channels carry the ground-truth identifiers of any injected anomaly, which is useful as a weak label for the detection pipeline. Battery state of charge, state of health and terminal voltage are intentionally not duplicated in this list: they continue to be reported through the standard VDA~5050 \texttt{batteryState} object. 
@@ -250,7 +259,7 @@ The extension of the original \texttt{vda5050\_vehicle\_simulator} required the 
 
 Specifically, an on-premise local AI model provided by the enterprise, NOVA, was primarily utilized during the design and iterative implementation phases, complemented by Google Gemini 3.8 Flash for architectural specification, code validation, and prompt structuring. The models were provided with detailed requirements regarding the desired physical behaviour, software architecture, VDA 5050 compatibility constraints, and telemetry channels to be incorporated into the simulator. 
 
-The prompts were formulated as rigorous software specification documents detailing the required electromechanical, thermal, and battery equations, architectural constraints within the asynchronous Tokio runtime, Serde serialization structures, runtime fault scenarios triggered via VDA 5050 Instant Actions, and unit test requirements. 
+The prompts were formulated as rigorous software specification documents detailing the required electromechanical, thermal, and battery equations, architectural constraints within the asynchronous Tokio runtime, Serde serialization structures, runtime fault scenarios triggered via VDA 5050 Instant Actions, and unit test requirements. The specification that the integrated simulator follows, including the points where the code departs from the first equations, is reproduced in Section~\ref{app:simulator_prompt}. 
 
 Crucially, the AI-generated code was not incorporated directly into the project without verification. Instead, all algorithmic proposals were systematically reviewed, manually adapted to fit the simulator codebase, validated against theoretical physics curves, and thoroughly tested before final integration. The consistency of the published channels with these electromechanical relations is checked in Chapter~\ref{chap:testing_evaluation}.
 
@@ -265,34 +274,22 @@ In the proposed architecture, Message Queuing Telemetry Transport (MQTT) serves 
 
 The MQTT broker is implemented using Eclipse Mosquitto, deployed as a containerized service (\texttt{mosquitto}) on the dedicated Docker bridge network \texttt{mqtt-net}. The broker exposes standard port 1883 for unencrypted edge communication within the container environment.
 
-Listing~\ref{lst:mosquitto-conf} illustrates the broker configuration (\texttt{mosquitto.conf}). Persistence is disabled (\texttt{persistence false}) because message durability and fault tolerance are delegated to the central event streaming log (Redpanda). All log output is routed to \texttt{stdout} to integrate with Docker's logging drivers.
+Listing~\ref{lst:mosquitto-conf} illustrates the broker configuration (\texttt{mosquitto.conf}). Persistence is enabled, so a Quality-of-Service 1 subscriber can resume after a disconnect and the broker can keep that queue across a restart. Message durability for the analytical path remains with Redpanda. A second listener on port 9883 speaks MQTT over WebSockets, which is how the digital twin reads the fleet from the browser. Both listeners allow anonymous clients. Log output goes to \texttt{stdout}.
 
 \begin{lstlisting}[language=configToml, caption={Mosquitto configuration (mosquitto.conf)}, label={lst:mosquitto-conf}, basicstyle=\ttfamily\small, breaklines=true]
-persistence false
+persistence true
+persistence_location /mosquitto/data/
 log_dest stdout
 
 listener 1883 0.0.0.0
 allow_anonymous true
+
+listener 9883 0.0.0.0
+protocol websockets
 \end{lstlisting}
 
-To prevent race conditions during stack initialization, a container health check is established in Listing~\ref{lst:mosquitto-docker-compose}. The probe uses \texttt{mosquitto\_pub} to publish a test message to a diagnostic topic every 5 seconds. Upstream telemetry producers (such as the vehicle simulator) and downstream consumers (such as Telegraf) utilize Docker's \texttt{condition: service\_healthy} dependency directive to ensure the broker is fully responsive before attempting connections.
+The service definition, including Telegraf, is Listing~\ref{lst:mqtt-broker-compose}. A health check publishes a test message with \texttt{mosquitto\_pub} every 5 seconds. The simulator and Telegraf wait on \texttt{condition: service\_healthy} before they connect.
 
-\begin{lstlisting}[language=yaml, caption={Mosquitto Docker Compose configuration}, label={lst:mosquitto-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
-services:
-  mosquitto:
-    image: eclipse-mosquitto:latest
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./mosquitto/config:/mosquitto/config
-    healthcheck:
-      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-p", "1883", "-t", "healthcheck", "-m", "1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    networks:
-      - mqtt-net
-\end{lstlisting}
 
 \section{Event Stream Layer Implementation}
 \label{sec:event_stream_implementation}
@@ -331,77 +328,8 @@ initial configuration for the simulated fleet, although the effective
 capacity must be validated through performance testing. The broker runs
 in \texttt{dev-container} mode with one CPU core assigned through
 \texttt{--smp 1}, reflecting the resource constraints of the local
-development environment.
+development environment. The service file is Listing~\ref{lst:redpanda-docker-compose}.
 
-\begin{lstlisting}[language=yaml, caption={Redpanda Docker Compose}, label={lst:redpanda-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
-services:
-  redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:v26.1.12
-    hostname: redpanda
-    command:
-      - redpanda
-      - start
-      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
-      - --rpc-addr redpanda:33145
-      - --advertise-rpc-addr redpanda:33145
-      - --mode dev-container
-      - --smp 1
-      - --default-log-level=info
-    ports:
-      - 19092:19092
-      - 19644:9644
-    volumes:
-      - redpanda-data:/var/lib/redpanda/data
-    networks:
-      - redpanda-net
-    healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  redpanda-console:
-    image: docker.redpanda.com/redpandadata/console:v3.8.0
-    entrypoint: /bin/sh
-    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
-    environment:
-      CONFIG_FILEPATH: /tmp/config.yml
-      CONSOLE_CONFIG_FILE: |
-        kafka:
-          brokers: ["redpanda:9092"]
-        redpanda:
-          adminApi:
-            enabled: true
-            urls: ["http://redpanda:9644"]
-    ports:
-      - 9080:8080
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    networks:
-      - redpanda-net
-
-  redpanda-init:
-    image: docker.redpanda.com/redpandadata/redpanda:v26.1.12
-    restart: "no"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        rpk topic create vda5050-state --partitions 4 -X brokers=redpanda:9092 --if-not-exists
-        rpk topic create fleet-features --partitions 4 -X brokers=redpanda:9092 --if-not-exists
-        rpk topic create ai-anomalies --partitions 4 -X brokers=redpanda:9092 --if-not-exists
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    networks:
-      - redpanda-net
-
-volumes:
-  redpanda-data:
-
-\end{lstlisting}
 
 \section{Streaming Integration and Inter-Service Connectivity}
 \label{sec:stream_integration_implementation}
@@ -417,23 +345,8 @@ A key architectural requirement is the clean decoupling between the edge MQTT pr
 
 Telegraf operates as a dual-homed container attached simultaneously to \texttt{mqtt-net} and \texttt{redpanda-net}. This network topology enforces strict isolation: source systems and the MQTT broker remain in \texttt{mqtt-net} with zero direct exposure to the internal Kafka network, while Telegraf transparently forwards incoming payloads across the boundary.
 
-Listing~\ref{lst:telegraf-docker-compose} shows the Docker Compose configuration for the Telegraf bridging service.
+Telegraf is the second service of Listing~\ref{lst:mqtt-broker-compose}. It mounts its configuration read-only and takes the broker addresses from the environment.
 
-\begin{lstlisting}[language=yaml, caption={Telegraf Docker Compose configuration}, label={lst:telegraf-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
-services:
-  telegraf:
-    image: telegraf:1.39-alpine
-    restart: unless-stopped
-    command: telegraf --config /etc/telegraf/conf/telegraf.conf
-    volumes:
-      - ./telegraf.conf:/etc/telegraf/conf/telegraf.conf:ro
-    environment:
-      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
-      KAFKA_BROKER: ${TELEGRAF_KAFKA_BROKER:-redpanda:9092}
-    networks:
-      - mqtt-net
-      - redpanda-net
-\end{lstlisting}
 
 The bridging logic is governed by three coordinated stages configured in \texttt{telegraf.conf} (Listing~\ref{lst:telegraf-conf}):
 \begin{enumerate}
@@ -494,13 +407,17 @@ The bridging logic is governed by three coordinated stages configured in \texttt
     mqtt_topic = '{{ index .Tags "topic" }}'
 \end{lstlisting}
 
-\subsection{Kafka Connect Integration and Custom Single Message Transformations}
+\subsection{Kafka Connect Sinks into QuestDB}
 \label{subsec:questdb-kafka-connect}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_streaming_integration}.}
 
-To transfer telemetry seamlessly from the Redpanda broker into QuestDB, a specialized Kafka Connect service (\texttt{questdb-kafka-connect}) was implemented. Because QuestDB is an append-only relational time-series database that expects tabular scalar structures, directly ingesting complex, hierarchically nested VDA~5050 JSON payloads (containing nested objects and arrays) poses technical challenges.
+The service \texttt{questdb-kafka-connect} runs the QuestDB sink connector. It joins \texttt{questdb-net} and \texttt{redpanda-net}, exposes the Connect REST API on port 8083, and keeps its configuration, offsets, and status in internal Redpanda topics. It starts only after the broker is healthy, the application topics exist, and \texttt{questdb-init} has applied the SQL files.
 
-\textit{(TO DO: SINK CONNECTOR IMPLEMENTATION)}
+Two connector definitions are registered by \texttt{questdb-kafka-connect-init}, which submits each file under \texttt{connectors/} and polls until the task reports \texttt{RUNNING}. Both use a JSON value converter with schemas disabled, ignore the Kafka key, and name the designated timestamp field \texttt{timestamp}.
+
+The \texttt{fleet-features} connector appends to the table \texttt{fleet\_features}. Symbol columns are \texttt{manufacturer}, \texttt{agv\_id}, and \texttt{map\_id}. The kinematic, battery, and motor measurements are declared as doubles, so the column type does not depend on the first record. This replaces the earlier sink on \texttt{vda5050-state}. That topic carried the nested state message, and the connector had to flatten it. The Silver job now publishes a row that already matches the table, and this connector adds no transform.
+
+The \texttt{ai-anomalies} connector appends to \texttt{ai\_anomalies}. Symbols are the vehicle, the model name and version, the class, and the three leading channel names. Doubles are the score, the two thresholds, and the three channel shares. The event also contains a nested \texttt{top\_features} array. A \texttt{ReplaceField} transform excludes that array, because the sink stores scalars and the same channels are already present as the three symbol and double pairs and as \texttt{top\_features\_summary}.
 
 \section{Stream Processing Layer: Apache Spark Implementation}
 \label{sec:spark-implementation}
@@ -511,7 +428,7 @@ The stream processing tier is implemented using \textbf{Apache Spark} (version 3
 \subsection{Docker Compose Service Definition}
 \label{subsec:spark-docker-definition}
 
-Listing~\ref{lst:spark-docker-compose} presents the Docker Compose definition of the streaming tier. 
+Listing~\ref{lst:spark-docker-compose} is the Compose definition of the streaming tier, including the inference service. 
 
 \paragraph{Initialization:}
 The container initialization is governed by health-check and completion dependencies:
@@ -519,120 +436,23 @@ The container initialization is governed by health-check and completion dependen
     \item It waits for the \texttt{redpanda} broker to report a healthy cluster status.
     \item It awaits the successful execution of \texttt{redpanda-init} to ensure that all required topics (including \texttt{vda5050-state} and \texttt{vda5050-state-deduplicated}) have been provisioned before job submission.
     \item It requires \texttt{minio} to be started and the \texttt{createbuckets} utility container to successfully complete bucket initialization (\texttt{lakehouse}).
+    \item It waits until the Iceberg REST catalog (\texttt{iceberg-rest}) is healthy and \texttt{iceberg-catalog-migrate} has finished, so tables created under the earlier catalog are visible before the first commit.
 \end{itemize}
 
 Once all dependencies are satisfied, streaming execution is launched using \texttt{spark-submit} in local client mode (\texttt{local[*]}), dynamically resolving the required Kafka integration library (\texttt{spark-sql-kafka-0-10}) and Amazon S3A connector (\texttt{hadoop-aws}).
 
-\begin{lstlisting}[language=yaml, caption={Apache Spark Docker Compose configuration}, label={lst:spark-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
-services:
-  spark-vda5050-state:
-    image: apache/spark:3.5.0
-    container_name: spark-vda5050-state
-    depends_on:
-      redpanda:
-        condition: service_healthy
-      redpanda-init:
-        condition: service_completed_successfully
-      minio:
-        condition: service_started
-      createbuckets:
-        condition: service_completed_successfully
-    networks:
-      - redpanda-net
-      - lakehouse-net
-    volumes:
-      - ./src:/opt/spark/src
-    environment:
-      - PYTHONPATH=/opt/spark/src
-      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
-      - KAFKA_INPUT_TOPIC=${KAFKA_INPUT_TOPIC:-vda5050-state}
-      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
-      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
-      - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
-      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
-      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
-      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
-      - PROCESSING_INTERVAL_BRONZE=${PROCESSING_INTERVAL_BRONZE:-15 seconds}
-    command: >
-      /opt/spark/bin/spark-submit
-      --conf spark.jars.ivy=/tmp/.ivy2
-      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
-      --master local[*]
-      /opt/spark/src/jobs/vda5050_state_writer.py
-
-  spark-fleet-features:
-    image: apache/spark:3.5.0
-    container_name: spark-fleet-features
-    depends_on:
-      redpanda:
-        condition: service_healthy
-      redpanda-init:
-        condition: service_completed_successfully
-      minio:
-        condition: service_started
-      createbuckets:
-        condition: service_completed_successfully
-    networks:
-      - redpanda-net
-      - lakehouse-net
-    volumes:
-      - ./src:/opt/spark/src
-    environment:
-      - PYTHONPATH=/opt/spark/src
-      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
-      - KAFKA_INPUT_TOPIC=${KAFKA_INPUT_TOPIC:-vda5050-state}
-      - KAFKA_OUTPUT_TOPIC=${KAFKA_OUTPUT_TOPIC:-fleet-features}
-      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
-      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
-      - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
-      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
-      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
-      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
-      - PROCESSING_INTERVAL_SILVER=${PROCESSING_INTERVAL_SILVER:-3 seconds}
-    command: >
-      /opt/spark/bin/spark-submit
-      --conf spark.jars.ivy=/tmp/.ivy2
-      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
-      --master local[*]
-      /opt/spark/src/jobs/fleet_features_writer.py
-
-  spark-maintenance:
-    image: apache/spark:3.5.0
-    restart: unless-stopped
-    depends_on:
-      spark-vda5050-state:
-        condition: service_started
-    networks:
-      - lakehouse-net
-    volumes:
-      - ./src:/opt/spark/src
-    environment:
-      - PYTHONPATH=/opt/spark/src
-      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
-      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
-      - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
-      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
-      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
-      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
-      - MAINTENANCE_TARGET=${MAINTENANCE_TARGET:-all}
-      - MAINTENANCE_POLL_INTERVAL=${MAINTENANCE_POLL_INTERVAL:-300}
-      - MAINTENANCE_SNAPSHOT_THRESHOLD=${MAINTENANCE_SNAPSHOT_THRESHOLD:-600}
-      - MAINTENANCE_SIZE_THRESHOLD_KB=${MAINTENANCE_SIZE_THRESHOLD_KB:-500}
-    command: python3 /opt/spark/src/jobs/maintenance_watcher.py
-
-networks:
-  redpanda-net:
-  lakehouse-net:
-\end{lstlisting}
 
 \paragraph{Apache Iceberg Catalog Configuration:}
-Metadata management in the streaming tier relies on a \textbf{Hadoop-based Iceberg catalog} rather than on an external catalog service.
-It is instantiated through the Spark \texttt{SparkCatalog} implementation by setting \texttt{spark.sql.catalog.\allowbreak lakehouse.type = hadoop} and pointing its \texttt{warehouse} to the object-store location \texttt{s3a://lakehouse/iceberg}.
-In this configuration the Iceberg metadata tree (table snapshots, schemas and manifests) is persisted directly as files inside the MinIO bucket through the Hadoop filesystem abstraction, which removes the need for a standalone metastore such as a Thrift or REST catalog and further reduces the number of operational dependencies.
-Table discovery and atomic metadata commits are therefore resolved against the S3-compatible object store itself, in line with the Lakehouse design presented in Chapter~\ref{chap:system_architecture} (Section~\ref{subsec:table-format-iceberg}).
+The catalog considered first was a \textbf{Hadoop Iceberg catalog}.
+Spark would have set \texttt{spark.sql.catalog.\allowbreak lakehouse.type = hadoop} and pointed the warehouse at \texttt{s3a://lakehouse/iceberg}, keeping the metadata tree as files in MinIO and adding no extra service.
+That layout fits a single writer.
+The same tables are opened by several Iceberg clients: the Bronze, Silver and inference jobs, the maintenance job, and the PyIceberg reader used for training.
+A Hadoop catalog has no shared commit service, and PyIceberg does not implement it, so each client would have resolved the current metadata on its own.
+The catalog is therefore an Iceberg \textbf{REST} service (\texttt{iceberg-rest}, the Apache Iceberg 1.8.1 REST fixture).
+Spark sets \texttt{spark.sql.catalog.lakehouse.type = rest} and \texttt{spark.sql.catalog.lakehouse.uri} to \texttt{http://iceberg-rest:8181}.
+The warehouse path is unchanged, so Parquet files and metadata files stay in MinIO, in line with the lakehouse design of Chapter~\ref{chap:system_architecture} (Section~\ref{subsec:table-format-iceberg}).
+The service stores namespace and table pointers in SQLite on the \texttt{iceberg-catalog} volume.
+Tables that already existed under the Hadoop layout were registered once: each \texttt{version-hint.text} was read and submitted to the REST register endpoint, and the historical snapshots remained the current tables.
 
 \subsection{Jobs} 
 The streaming layer is implemented through a set of dedicated Spark Structured Streaming jobs, each responsible for a specific stage of the data pipeline. 
@@ -640,13 +460,16 @@ Three streaming data-path jobs compose the Medallion pipeline:
   \begin{itemize} 
     \item \texttt{vda5050\_state\_writer}: Persists raw VDA5050 telemetry from Kafka into the Bronze layer. 
     \item \texttt{fleet\_features\_writer}: Extracts, transforms and enriches telemetry into a machine-learning-ready feature representation. 
-    \item \texttt{ai\_anomalies\_writer}: Executes real-time anomaly detection and publishes anomaly scores for downstream consumption. 
-  \end{itemize} In addition, an auxiliary operational job (\texttt{spark-maintenance}) executes asynchronously outside the streaming data flow to perform automated compaction and metadata maintenance on the Iceberg tables. The feature engineering and anomaly detection streaming jobs implement a Dual-Sink Output Pattern, simultaneously persisting processed data into the data lake and publishing the resulting stream back to Redpanda for further processing. 
-  
-  \paragraph{Dual-Sink Output Pattern} The feature engineering and anomaly detection jobs write their outputs to two independent destinations: 
-    \begin{itemize} 
-      \item \textbf{Analytical Persistence Sink (MinIO):} Processed datasets are stored as Apache Iceberg tables within the data lakehouse, enabling historical analytics and schema evolution. 
-      \item \textbf{Event Streaming Sink (Redpanda):} Processed records are republished to Kafka topics, allowing downstream consumers to access enriched telemetry and anomaly detection results in real time. \end{itemize}
+    \item \texttt{anomaly\_detector}: Scores the live feature stream and publishes each window to \texttt{ai-anomalies}.
+  \end{itemize} In addition, an auxiliary operational job (\texttt{spark-maintenance}) executes asynchronously outside the streaming data flow to perform automated compaction and metadata maintenance on the Iceberg tables.
+
+  The three streaming jobs do not share one output pattern. The Bronze job only appends the raw payload to Iceberg. The Silver job appends the curated features to Iceberg and publishes the same records to Redpanda. The inference job does the same with its scores: it appends them to \texttt{lakehouse.gold.ai\_anomalies} and publishes them to \texttt{ai-anomalies}. QuestDB keeps a seven-day copy of that topic for the dashboards. The Gold table is the copy that remains, so a later query can count how many windows were normal, suspicious, or anomalous in one year and in the next.
+
+  \paragraph{Dual sink of the Silver job} The feature engineering job writes its batch to two destinations:
+    \begin{itemize}
+      \item \textbf{Analytical persistence (MinIO):} The curated rows are appended to the Silver Iceberg table, which is the history used to train the next model.
+      \item \textbf{Event streaming (Redpanda):} The same rows are published to \texttt{fleet-features}, which is the stream the inference job scores.
+    \end{itemize}
 
 \subsection{Bronze Ingestion Job} \label{subsec:bronze-ingestion-job} 
 The Bronze ingestion job (\texttt{vda5050\_state\_writer.py}) constitutes the entry point of the Medallion architecture. 
@@ -659,21 +482,22 @@ Spark is configured to access MinIO through the S3A filesystem connector, using 
 
 The target Iceberg table represents the Bronze layer of the data platform and stores the complete telemetry payload together with ingestion metadata required for historical analysis and full data lineage.
 \paragraph{Ingestion and Storage Configuration} 
-The job executes micro-batches at a configurable interval, defined by the environment variable \texttt{PROCESSING\_INTERVAL}.
+The job executes micro-batches at a configurable interval, defined by the environment variable \texttt{PROCESSING\_INTERVAL\_BRONZE}, fifteen seconds by default.
 \subsection{Silver Feature Engineering Job}
-Para la implementación de la capa de silver, se crea un job llamado, fleet-features-writer.py, el cual se encarga de flattening y de features extractions.
-Lee del topic, vda5050-state, hace flattening, y feature extraction, y luego escribe en el topic fleet-features, y en la tabla de iceberg con el mismo nombre.
-El job reutiliza las funciones de sink.py y de spark.
-Para el tiempo de procesamiento, se utiliza un microbatch personalizable, el cual se puede configurar a través de la variable de entorno. 
-En el caso de silver, se establece un tiempo de procesamiento por defecto menor al de bronze, debido al requisito de real time para fleet-features, que tiene que ser posteriormente en la parte de inferencia analizado en tiempo real.
 \label{subsec:silver-feature-engineering-job}
 
-\textit{(TO DO)}
+The Silver job is \texttt{fleet\_features\_writer.py}, submitted by the service \texttt{spark-fleet-features}. It reads \texttt{vda5050-state}. On each micro-batch, \texttt{extract\_fleet\_features} parses the JSON payload, keeps the event time of the message, and flattens position, velocity, and battery into columns. Motor current, voltage, temperature, speed, torque, power, and back electromotive force are read from the \texttt{information} array, from the entry whose type is \texttt{motor\_telemetry}. A message without a serial number is dropped. The fault flag is the telemetry flag when it is present, and otherwise the presence of a VDA~5050 error.
 
-\subsection{Gold Inference Job}
+The batch is appended to \texttt{lakehouse.silver.fleet\_features} and published to \texttt{fleet-features}. Both writes go through the shared sink helpers. The Kafka key stays the manufacturer and the serial number. Rows are sorted by vehicle and time before the Iceberg append. The table is created on startup if it is missing, partitioned by day, from the schema generated out of \texttt{schema/fleet\_features.yml}.
+
+The trigger interval is \texttt{PROCESSING\_INTERVAL\_SILVER}, three seconds by default, against fifteen seconds for Bronze. The shorter interval is there because the inference job scores this publication as it arrives. The checkpoint is stored under the lakehouse checkpoint prefix, in \texttt{fleet\_features\_writer}.
+
+\subsection{Inference Job}
 \label{subsec:gold-inference-job}
 
-\textit{(TO DO)}
+The third streaming stage is \texttt{anomaly\_detector.py}, submitted by \texttt{spark-anomaly-detector}. It consumes \texttt{fleet-features}. It does not read the Silver table it has just been written beside. The windowing, the production model, the scaler, and the classes \texttt{NORMAL}, \texttt{SUSPICIOUS}, and \texttt{ANOMALY} are those of Section~\ref{subsec:ml-inference-implementation}.
+
+Each scored window is appended to \texttt{lakehouse.gold.ai\_anomalies} and written to \texttt{ai-anomalies}, with \texttt{agv\_id} as the key. The event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. The Iceberg row keeps those scalar fields and is partitioned by day. QuestDB ingests the topic through the connector of Section~\ref{subsec:questdb-kafka-connect} and drops it after seven days. A count by year is a query on the Gold table, which still holds the rows after maintenance has compacted the small files. Maintenance expires old snapshots and keeps the last two, so the comparison uses the current table rather than an old snapshot. If the Iceberg append fails, the job logs the error and still publishes to Kafka, so the dashboard is not blocked by the archive. The checkpoint is local to the container and is removed on start, so a restart follows the live tail of \texttt{fleet-features}. An interval that was missed remains in the Silver table and can be read again by a training-style scan.
 
 \subsection{Lakehouse Maintenance Job}
 \label{subsec:lakehouse-maintenance-job}
@@ -682,14 +506,14 @@ En el caso de silver, se establece un tiempo de procesamiento por defecto menor 
 Continuous micro-batch ingestion into the Bronze table (every 15~seconds) and Silver table (every 3~seconds) continuously writes small Parquet files and generates rapid metadata commits. Over time, this causes the small files problem and metadata bloat. To counteract this without impacting the latency or memory footprint of the active streaming jobs, lakehouse maintenance is decoupled into a dedicated two-stage operational service:
 
 \begin{enumerate}
-    \item \textbf{Smart Observer Daemon (\texttt{maintenance\_watcher.py}):} A lightweight background daemon executed directly under Python~3 without instantiating an Apache Spark session or JVM. At configurable polling intervals (\texttt{MAINTENANCE\_POLL\_INTERVAL}, default 300~seconds), the daemon queries the MinIO S3 API using standard AWS Signature Version~4 requests in pure Python. It reads the Iceberg \texttt{version-hint.text} file to locate the active metadata descriptor (\texttt{v\{version\}.metadata.json}), parses the current snapshot count and computes the JSON metadata size in kilobytes. Maintenance is dynamically triggered only when either of two operational thresholds is breached:
+    \item \textbf{Smart Observer Daemon (\texttt{maintenance\_watcher.py}):} A lightweight background daemon executed directly under Python~3 without instantiating an Apache Spark session or JVM. At configurable polling intervals (\texttt{MAINTENANCE\_POLL\_INTERVAL}, default 300~seconds), the daemon calls the REST catalog (\texttt{GET /v1/namespaces/\{namespace\}/tables/\{table\}}). The response carries the current metadata document. The daemon counts its snapshots and measures the document size in kilobytes. It does not read \texttt{version-hint.text}, which belonged to the Hadoop catalog. Maintenance is dynamically triggered only when either of two operational thresholds is breached:
     \begin{itemize}
         \item Monitored table snapshots $\ge$ \texttt{MAINTENANCE\_SNAPSHOT\_THRESHOLD} (default: 600 snapshots).
         \item Metadata descriptor size $\ge$ \texttt{MAINTENANCE\_SIZE\_THRESHOLD\_KB} (default: 500~KB).
     \end{itemize}
     This threshold-based observer approach avoids spinning up heavy Spark processes when tables are within optimal parameters, conserving cluster CPU and RAM.
 
-    \item \textbf{Isolated Compaction Execution (\texttt{maintenance.py}):} When a threshold is exceeded, the watcher launches \texttt{maintenance.py} as an isolated \texttt{spark-submit} subprocess. Subprocess isolation guarantees that the JVM is completely terminated and its memory reclaimed by the operating system upon completion. The Spark job connects to the Hadoop Iceberg catalog and sequentially executes three table maintenance procedures via Spark SQL:
+    \item \textbf{Isolated Compaction Execution (\texttt{maintenance.py}):} When a threshold is exceeded, the watcher launches \texttt{maintenance.py} as an isolated \texttt{spark-submit} subprocess. Subprocess isolation guarantees that the JVM is completely terminated and its memory reclaimed by the operating system upon completion. The Spark job connects to the same REST catalog and sequentially executes three table maintenance procedures via Spark SQL:
     \begin{itemize}
         \item \texttt{CALL lakehouse.system.rewrite\_data\_files}: Rewrites and consolidates small micro-batch Parquet files into standardized 64~MiB target files (\texttt{target-file-size-bytes = 67108864}), significantly reducing file count and metadata pointers.
         \item \texttt{CALL lakehouse.system.rewrite\_manifests}: Reorganizes and defragments the manifest files to accelerate partition pruning during query planning.
@@ -697,13 +521,15 @@ Continuous micro-batch ingestion into the Bronze table (every 15~seconds) and Si
     \end{itemize}
 \end{enumerate}
 
-The job accepts a configurable target via \texttt{MAINTENANCE\_TARGET} (\texttt{all}, \texttt{bronze}, or \texttt{silver}), defaulting to maintaining both layers of the Medallion lakehouse.
+The job accepts a configurable target via \texttt{MAINTENANCE\_TARGET} (\texttt{all}, \texttt{bronze}, \texttt{silver}, or \texttt{gold}), defaulting to maintaining the three tables.
 
 \section{Data Lakehouse Layer Implementation}
 \label{sec:data-lakehouse-implementation}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:data-lakehouse-layer}.}
 
-\textit{(TO BE COMPLETED: Overview of the Data Lakehouse implementation, storage topology, and integration between object storage and modern table formats).}
+The lakehouse is the MinIO bucket \texttt{lakehouse}. The warehouse path is \texttt{s3a://lakehouse/iceberg}, and the streaming checkpoints sit beside it under \texttt{s3a://lakehouse/checkpoints}. Table files stay in that bucket. The pointers to the current metadata are held by the REST catalog of Section~\ref{subsec:spark-docker-definition}, which the Spark jobs, maintenance and training share.
+
+Three tables are created by the jobs. \texttt{lakehouse.bronze.vda5050\_state} keeps every raw state message. \texttt{lakehouse.silver.fleet\_features} keeps the curated row, and it is the table the trainer reads. \texttt{lakehouse.gold.ai\_anomalies} keeps every scored window, with the model version and the class, so the history of detections outlives the seven-day retention of QuestDB. The maintenance job of Section~\ref{subsec:lakehouse-maintenance-job} compacts all three.
 
 \subsection{S3-Compatible Object Storage: MinIO}
 \label{subsec:minio-s3-implementation}
@@ -716,52 +542,15 @@ Two services are defined within the Docker Compose deployment:
     \item \textbf{Bucket Provisioning (\texttt{createbuckets}):} A lightweight initialization container using the MinIO Client (\texttt{minio/mc}) CLI. It waits for the MinIO server to report a healthy status, configures a local connection alias, and automatically provisions the target bucket (\texttt{lakehouse}) using \texttt{mc mb --ignore-existing}. Once bucket creation succeeds, the container terminates cleanly.
 \end{itemize}
 
-Both services are attached to the \texttt{lakehouse-net} network, ensuring secure, isolated network communication with the Spark stream processing tier.
+Both services are attached to the \texttt{lakehouse-net} network, ensuring isolated communication with the Spark stream processing tier. The service file is Listing~\ref{lst:minio-docker-compose}.
 
-\begin{lstlisting}[language=yaml, caption={MinIO Docker Compose configuration}, label={lst:minio-docker-compose}, basicstyle=\ttfamily\small, breaklines=true]
-services:
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: admin123456
-    volumes:
-      - minio-data:/data
-    ports:
-      - "19000:9000"
-      - "9001:9001"
-    networks:
-      - lakehouse-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  createbuckets:
-    image: minio/mc
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      sleep 5;
-      mc alias set local http://minio:9000 admin admin123456;
-      mc mb --ignore-existing local/lakehouse;
-      exit 0;
-      "
-    networks:
-      - lakehouse-net
-
-volumes:
-  minio-data:
-\end{lstlisting}
 
 \subsection{Table Format Implementation: Apache Iceberg}
 \label{subsec:iceberg-implementation}
 
-\textit{(TO BE COMPLETED: Apache Iceberg catalog configuration, table schema definition, and partitioning strategy across Bronze, Silver, and Gold tiers).}
+Each streaming job creates its table with \texttt{CREATE TABLE IF NOT EXISTS} on startup, through \texttt{ensure\_iceberg\_table}. The Bronze table has three columns: the Kafka routing key, the raw JSON value, and the ingestion timestamp. The Silver table has the columns of \texttt{schema/fleet\_features.yml}. That file is the source of the Spark schema and of the QuestDB DDL, so the analytical table and the operational table name the same fields. The Gold table stores the scored window: the event time, the vehicle, the window bounds, the model name and version, the score, both thresholds, the class, and the three leading channels.
+
+The three tables are partitioned by day on \texttt{timestamp}. Inside a partition the Bronze rows are ordered by key and time, and the Silver and Gold rows by vehicle and time. Parquet is compressed with zstd. The target file size is 64~MiB, which is the size the maintenance rewrite aims at. The write distribution mode is \texttt{none}, so a micro-batch is appended without a reshuffle. A bounded number of previous metadata versions is kept, and a failed commit is retried. The catalog is the REST catalog already set on the Spark session. It is not repeated here.
 
 \section{QuestDB Implementation and Integration}
 \label{sec:questdb-implementation}
@@ -769,7 +558,7 @@ volumes:
 
 As established in the architectural design (Chapter~\ref{chap:system_architecture}), the platform adopts a bifurcated persistence strategy that strictly separates the analytical lakehouse storage (MinIO and Apache Iceberg) from the operational time-series database. While the lakehouse is optimized for heavy, multi-tier batch analytics and offline model training, real-time observability requires a database capable of sub-second streaming ingestion and high-frequency SQL aggregations across sliding time windows. To fulfill this operational role, \textbf{QuestDB} (version 9.4.3) was selected and integrated into the containerized platform.
 
-The QuestDB subsystem interfaces directly with the central event streaming layer through a dedicated, containerized \textbf{Apache Kafka Connect} cluster. This design establishes an automated ingestion pipeline that streams live VDA~5050 robot telemetry from Redpanda into QuestDB without requiring intermediate message-polling services or bespoke application logic.
+The QuestDB subsystem interfaces directly with the central event streaming layer through a dedicated, containerized \textbf{Apache Kafka Connect} cluster. The connectors append the Silver publication \texttt{fleet-features} and the inference publication \texttt{ai-anomalies}. The raw \texttt{vda5050-state} topic is no longer sunk here. It remains the input of the Bronze and Silver Spark jobs, and its history stays in the lakehouse.
 
 \subsection{Database Deployment and Schema Architecture}
 \label{subsec:questdb-deployment-schema}
@@ -785,9 +574,9 @@ QuestDB provides native multi-protocol support. In this deployment, three distin
 
 A container health check continuously probes the HTTP status endpoint (\texttt{http://localhost:9003/status}) to ensure the engine is fully initialized before downstream connectors attempt data transmission.
 
-To automate database table provisioning upon initial startup, a one-shot container (\texttt{questdb-init}) is defined using \texttt{curlimages/curl}. It executes after QuestDB reports a healthy state, submitting SQL DDL commands to QuestDB's \texttt{/exec} REST endpoint.
+To automate database table provisioning upon initial startup, a one-shot container (\texttt{questdb-init}) is defined using \texttt{curlimages/curl}. It executes after QuestDB reports a healthy state and submits every file in \texttt{schema/} to the \texttt{/exec} endpoint, one statement at a time.
 
-\textit{(TO DO: TABLE IMPLEMENTATIONS)}
+Two tables are created, both designated on \texttt{timestamp}, partitioned by day, written with a write-ahead log, and retained for seven days. \texttt{fleet\_features} stores the Silver row: the vehicle identifiers as symbols, the position and the kinematic and electrical channels as doubles, and the driving, charging, and fault flags as booleans. \texttt{ai\_anomalies} stores one scored window: the vehicle, the model name and version, the score, the warning and anomaly thresholds, the class, the window bounds, a short summary of the contributing channels, and the three leading channels with their share of the error. The column lists are the same ones declared by the connectors, so an append does not have to alter the table.
 
 \subsection{Automated Lifecycle and Dependency Management}
 \label{subsec:questdb-lifecycle}
@@ -795,29 +584,102 @@ To automate database table provisioning upon initial startup, a one-shot contain
 To guarantee reliable system initialization, service orchestration is strictly ordered through Docker health checks and one-shot provisioning containers:
 \begin{enumerate}
     \item The \texttt{questdb} service initializes its engine and validates readiness on port 9003.
-    \item The \texttt{questdb-init} service triggers the SQL DDL creation of the \texttt{vda5050\_state} table.
+    \item The \texttt{questdb-init} service creates \texttt{fleet\_features} and \texttt{ai\_anomalies}.
     \item The \texttt{questdb-kafka-connect} service initializes only after the Redpanda broker is healthy, all required Kafka topics are created (\texttt{redpanda-init}), and QuestDB tables exist (\texttt{questdb-init}).
     \item Finally, a dedicated initialization container (\texttt{questdb-kafka-connect-init}) executes an automated shell script that submits the connector configuration via the Kafka Connect REST API (\texttt{PUT /connectors/<name>/config}). The script actively polls the connector status endpoint until the task achieves the \texttt{RUNNING} state, ensuring that the pipeline is completely operational before simulated AGVs begin streaming messages.
 \end{enumerate}
 
-This architecture guarantees end-to-end automated orchestration, preventing race conditions during platform startup while maintaining strict network isolation between operational storage, event streaming, and analytical tiers.
-
-\textit{(TO DO: DOCKER COMPOSE)}
+This order prevents the connector from starting against a missing table, and it prevents Grafana from starting before the sinks are running. The four services live in the QuestDB Compose file. \texttt{questdb} publishes the console on port 9000, the PostgreSQL wire on 8812, and the line protocol on 9009, and it keeps \texttt{questdb-data}. The init container and the connector init container exit when their work is done. The connector process stays up. Grafana, described in Section~\ref{sec:grafana_implementation}, is the last service in this chain.
 
 \section{Machine Learning Pipeline Implementation}
 \label{sec:ml_pipeline_implementation}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_ml}.}
 
-\textit{(TO DO)}
+This section describes how the machine learning layer is built. The design reasons are those of Section~\ref{sec:arch_ml}. What follows is the code path that carries them out: one shared library, an on-demand training run that publishes to MLflow, and a Spark job that scores the live \texttt{fleet-features} stream with the production model.
+
+\subsection{The shared contract}
+\label{subsec:ml-common-implementation}
+
+The preprocessing rules live in the Python package \texttt{ml-common}. The training image and the inference image both mount that tree read-only and add it to \texttt{PYTHONPATH}, so the two processes import the same modules. The package reads \texttt{schema/ml\_model\_contract.yml}, which fixes the eight channels and their order (linear and angular velocity, battery voltage, current and temperature, motor current, temperature and power), a window of 60 samples with step 1, a maximum gap of 5 seconds, the registered model name \texttt{agv-gru-autoencoder}, the warning and anomaly multipliers, and the topic names \texttt{fleet-features} and \texttt{ai-anomalies}.
+
+Training calls \texttt{build\_windows} and \texttt{split\_windows}. Inference calls \texttt{validate\_and\_filter\_records} and \texttt{StreamingWindowBuffer}. The buffer keeps an independent tail of samples for each \texttt{agv\_id} across micro-batches. It emits a window only when the tail has the full length and no gap above the contract, and it discards samples already emitted so the tail stays bounded. A window never mixes two vehicles.
+
+\subsection{Offline training and the MLflow record}
+\label{subsec:ml-training-implementation}
+
+Training is the \texttt{ml-train} service, built from \texttt{docker/ml-module}. It belongs to the Compose profile \texttt{ml}, so a normal stack start does not launch it. A run is started explicitly, after MinIO and the MLflow server are healthy, and the container joins \texttt{lakehouse-net} to read the warehouse and \texttt{ml-net} to reach the tracking server. Endpoints, the date range, and the training hyperparameters come from the root environment file. The service reads them through a typed configuration object rather than from constants in the source.
+
+The entry point \texttt{training/train.py} executes one pipeline. \texttt{IcebergDatasetReader} loads \texttt{lakehouse.silver.\allowbreak fleet\_features} for the requested interval through PyIceberg and the same REST catalog (\texttt{ICEBERG\_CATALOG\_TYPE=rest}). PyIceberg does not implement a Hadoop catalog, which is one reason the platform moved off that first design. The scan returns a table ordered by vehicle and by time.
+
+\texttt{build\_windows} cuts one window per step inside each vehicle. \texttt{split\_windows} assigns the earliest 80\,\% of each vehicle's windows to training and the later tail to validation. \texttt{FeatureScaler} fits a \texttt{StandardScaler} on the training windows only, writes \texttt{artifacts/scaler.pkl}, and transforms the validation windows with those frozen statistics.
+
+The network is \texttt{GRUAutoencoder}. An encoder GRU reads the window, a linear layer compresses the last hidden state (default hidden size 64, latent size 32, two layers), that state is repeated across the window, and a decoder GRU with a linear output reconstructs the eight channels. \texttt{AutoencoderTrainer} minimises mean squared error with Adam. \texttt{ReduceLROnPlateau} lowers the learning rate when the validation loss stalls. If the validation loss does not improve for the patience interval, training stops and the weights of the best epoch are restored.
+
+The run then logs the scaler under \texttt{preprocessor/scaler.pkl}, the metadata under \texttt{metadata/training\_metadata.json}, and the checkpoint under \texttt{weights/model.pt}. The metadata records the mean and standard deviation of the reconstruction error on the validation windows, which later define the score thresholds. The same call registers the network with the PyTorch flavor of MLflow as a new version of \texttt{agv-gru-autoencoder}, including the input and output signature inferred from one validation window. The tracking server (\texttt{http://mlflow:5000}, experiment \texttt{agv-anomaly-detection}) stores its database and these files on the \texttt{mlflow-data} volume. The local \texttt{artifacts/} directory is only the working copy of that run.
+
+The names and the metric keys follow Section~\ref{subsec:arch_mlflow_record}, so a later run can be sorted against this one. \texttt{training/record.py} builds the run name \texttt{gru-h}$\langle$hidden$\rangle$\texttt{-l}$\langle$latent$\rangle$\texttt{-w}$\langle$window$\rangle$\texttt{-}$\langle$dataset$\rangle$. The dataset token is the \texttt{--dataset-id} argument, or \texttt{ML\_DATASET\_ID} when the argument is omitted. An empty token is stored as \texttt{unlabeled}, and the process warns. Parameters, written once, are the data interval, the feature list in contract order, the window, the step, the maximum gap, the split, the hidden and latent sizes, the depth, the dropout, the optimiser, the learning rate, the weight decay, the batch size, and the epoch cap.
+
+Metrics use a fixed slash vocabulary. The epoch curves are \texttt{train/loss}, \texttt{val/loss}, and \texttt{train/learning\_rate}. The value used to compare runs is \texttt{val/loss\_best}, logged with the best epoch, the stopping epoch, the duration, the train and validation window counts, and the validation score mean, standard deviation, and percentiles \texttt{val/score\_p50}, \texttt{val/score\_p95}, and \texttt{val/score\_p99}. Each contracted channel logs \texttt{val/feat\_mse/} followed by its name and \texttt{val/feat\_share/} followed by the same name. A scenario logs \texttt{scenario/} followed by its name and \texttt{/mse}, and the same prefix with \texttt{/windows}. The scenario name has to be one of the closed list in that section. Any other name is rejected before it becomes a key. Tags are \texttt{task}, \texttt{model\_family}, \texttt{dataset\_id}, and \texttt{contract\_version}. The trainer registers a new version and does not move the \texttt{production} alias. Runs already stored under the earlier key names are left as they are.
+
+A run is launched from the repository root once the lakehouse and MLflow are up, for example \texttt{docker compose --profile ml run --rm ml-train} with \texttt{--start-date} and \texttt{--end-date} bounding the Silver snapshot. The same flags override the window, the batch size, and the epoch cap for that invocation. The environment defaults remain 60 samples, step 1, an 80\,\% chronological split, and at most 50 epochs.
+
+\subsection{Real-time scoring}
+\label{subsec:ml-inference-implementation}
+
+Scoring is the service \texttt{spark-anomaly-detector}. It submits \texttt{anomaly\_detector.py} with \texttt{spark-submit} in local mode, after the Silver streaming job has started and the MLflow server is healthy. It mounts the same \texttt{ml-common} tree and the same contract file.
+
+The query subscribes to \texttt{fleet-features} with a one-second trigger and begins at the latest offset. Each micro-batch is processed in \texttt{foreachBatch}. Records that fail the contract are counted and dropped. The surviving records update the per-vehicle buffer. Completed windows are scaled with the \texttt{StandardScaler} downloaded from the MLflow run of the resolved model, then reconstructed by that model in evaluation mode. The score of a window is its mean squared error. It is labeled \texttt{NORMAL}, \texttt{SUSPICIOUS}, or \texttt{ANOMALY} against the two levels carried by the training metadata of that version, by default the validation mean plus two and plus four standard deviations. Windows above the warning level also carry the channels with the largest share of the error.
+
+The batch is appended to \texttt{lakehouse.gold.ai\_anomalies} and written to the topic \texttt{ai-anomalies}, with \texttt{agv\_id} as the Kafka key. Each event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. QuestDB ingests the topic through the Kafka Connect path used for the operational store and retains it for seven days. The Gold table is the longer record.
+
+The model is loaded at startup from the registry. The job resolves the version that carries the \texttt{production} alias and downloads the scaler logged in that same run; the network itself is the PyTorch flavor registered for the version. On a poll, by default once a minute, it repeats the lookup and reloads the model and the scaler together when the alias points at a new version. The streaming checkpoint is cleared on start, so a restart follows the live tail of \texttt{fleet-features} instead of replaying the backlog. The Silver table remains the place from which a missed interval can be scored again by a training-style read.
 
 \section{Grafana Implementation}
 \label{sec:grafana_implementation}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_observability}.}
 
-\textit{(TO DO)}
+The service \texttt{grafana} is a Grafana 13.1 image with the QuestDB data-source plugin installed at build time. It joins \texttt{questdb-net} and publishes the console on port 3000. It starts after \texttt{questdb-kafka-connect-init} has finished, so the tables exist and the sinks are running before a board is opened. Sign-up is disabled. Session state is kept on the \texttt{grafana-data} volume.
 
-\section{Security and Network Isolation Enforcement}
-\label{sec:security_implementation}
-\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_security}.}
+The data source is provisioned from a file, and it is not editable in the interface. It uses the QuestDB plugin against the PostgreSQL wire of the database, host \texttt{questdb} and port 8812, with the read-only account \texttt{grafana}. TLS on that connection is disabled, which is the same clear-text deployment recorded as future work in Section~\ref{subsec:future_tls}.
 
-\textit{(TO DO)}
+Dashboards are provisioned from JSON files under \texttt{dashboards/questdb}. The file provider rebuilds the folder from that directory, so a board shipped with the repository appears without an import. Each board refreshes every five seconds and offers a vehicle variable. The five boards are Fleet Battery, Fleet Velocity, Fleet Powertrain Physics, Fleet Features - Canonical Silver Overview, and AGV Anomaly Detection \& ML Inference. The first four query \texttt{fleet\_features}. The inference board queries \texttt{ai\_anomalies}: counts by class, the score against the two thresholds, and the channels that dominate the error. Adding a panel is a change to those files. The service does not subscribe to Redpanda and does not write to QuestDB.
+
+\section{Supporting Utilities Implementation}
+\label{sec:utilities_implementation}
+\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_utilities}.}
+
+This section describes how the three supporting tools are built. The reasons for adding them are those of Section~\ref{sec:arch_utilities}. None of the three writes telemetry. The orchestrator drives the simulator, the twin watches that exchange, and the portal only reports whether the stack answers.
+
+\subsection{The factory orchestrator}
+\label{subsec:factory-orchestrator-implementation}
+
+The service \texttt{factory-orchestrator} is a Node-RED process on \texttt{mqtt-net}. It starts with the main stack, once Mosquitto is healthy. The flow file \texttt{flows.json} is mounted read-only and is the definition that runs. The editor cannot deploy over it. Stock and robot roles persist in the \texttt{nodered-data} volume, so a restart continues the ledger. The broker address and the VDA~5050 prefix come from the root environment. The prefix defaults to \texttt{uagv/v2/rikeb}.
+
+What enters from the simulator is \texttt{state} and \texttt{connection} for each serial. What leaves towards the simulator is an \texttt{order} or an \texttt{instantActions} message on that same prefix. The orchestrator also publishes a private \texttt{factory/} bus for its own tabs and for the twin: a retained \texttt{factory/config} and \texttt{factory/stock}, production and mission events, battery and fault edges, and \texttt{factory/log}. Telegraf subscribes only to \texttt{state}, so this bus never reaches Redpanda or the lakehouse.
+
+The flows divide the work as follows.
+\begin{enumerate}
+    \item \textbf{Config} builds the plant: the zones, the five vehicles (\texttt{t11} to \texttt{t15}), their routes, and the production rates, and publishes that description on \texttt{factory/config}.
+    \item \textbf{Bootstrap} sends \texttt{initPosition} until every vehicle is anchored, then opens the factory.
+    \item \textbf{State ingestion} reduces each \texttt{state} and \texttt{connection} message to a compact snapshot of pose, battery, order, and loads.
+    \item \textbf{Order templates} listen on \texttt{factory/cmd/internal}. A command becomes one spec-valid order or instant action, and a copy is written to \texttt{factory/log}.
+    \item \textbf{Production} ticks the wheel and chassis dispensers.
+    \item \textbf{Scheduler} runs once a second and is the only writer of the stock ledger. It keeps a role for each vehicle, dispatches the next mission when stock and the vehicle allow it, sends a vehicle to its dock when the battery requires it, and watches missions that do not finish. The missions are fixed loops: wheels from production to the warehouse, chassis along the same pattern, both parts onward to assembly, and the finished good out to the dispatch bay.
+    \item \textbf{Fault console} is a dashboard on the same service. It sends \texttt{injectFault}, \texttt{clearFaults}, or \texttt{resetFaults} for one chosen vehicle. The severity selected in the page is mapped to the intensity the simulator applies. The scheduler is not modified.
+\end{enumerate}
+
+Tabs do not call each other inside Node-RED. The scheduler emits a command, the order tab performs it, and both share the file-backed global context.
+
+\subsection{The digital twin}
+\label{subsec:digital-twin-implementation}
+
+The service \texttt{digital-twin} serves the built browser application as static files. It has no server-side logic. On start it writes a \texttt{config.js} from the environment, so one image can point at a different broker, a different set of serial labels, or no factory layer at all. The page then connects from the browser to Mosquitto over its WebSocket listener.
+
+Two subscriptions feed the view. The first is the VDA~5050 traffic of the fleet: \texttt{state}, \texttt{visualization}, \texttt{connection}, and \texttt{order}. Poses are stored outside the React tree and sampled on each animation frame, so the vehicles move without a render on every message. Battery, order, loads, and errors update a store at the rate of \texttt{state}. Status, mission, and progress are derived from that store when the panel draws. A vehicle with no \texttt{state} for the configured interval, five seconds by default, is shown as having no data. The second subscription is the \texttt{factory/} bus. It draws the dispensers, the stacked parts, the assembly cell, and the finished-good grid from \texttt{stock}, \texttt{production}, and \texttt{config}. Clearing the factory prefix in the environment removes that layer and leaves a fleet-only view. The page publishes nothing.
+
+\subsection{The platform portal}
+\label{subsec:platform-portal-implementation}
+
+The service \texttt{platform-portal} is one container. A FastAPI process holds the service registry and probes it, and it serves the React page that lists the results. The container joins \texttt{mqtt-net}, \texttt{redpanda-net}, \texttt{questdb-net}, \texttt{lakehouse-net}, and \texttt{ml-net}, so a probe uses the Docker name of the target. The link shown to the operator is the host port of that same service.
+
+The registry is a fixed list: Grafana, QuestDB, Redpanda Console, MinIO, MLflow, Kafka Connect, Mosquitto, the orchestrator, and the twin. Each entry has a display name, the external address, and an internal check. The check is an HTTP request against a health path, except for Mosquitto, which is a TCP connection to the broker. The page polls the API, shows whether the service answered and how long the probe took, and opens the external address in a new view. Adding a service is an entry in that list. The portal does not start, stop, or configure anything it links to.

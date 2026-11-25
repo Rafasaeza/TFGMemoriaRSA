@@ -1,0 +1,31 @@
+secrets:
+  ca_cert:
+    file: ./certs/edag-r1.crt
+
+include:
+  - docker/mqtt-broker/docker-compose.yml
+  - path:
+      - docker/source_systems/vda5050_vehicle_simulator/docker-compose.yml
+      - docker/source_systems/vda5050_vehicle_simulator/docker-compose.override.yml
+  - docker/redpanda/docker-compose.yml
+  - docker/observability/questdb/docker-compose.yml
+  - docker/observability/grafana/docker-compose.yml
+  - docker/utils/platform-portal/docker-compose.yml
+  - docker/utils/factory-orchestrator/docker-compose.yml
+  - docker/utils/digital-twin/docker-compose.yml
+  - docker/stream-processing/spark/docker-compose.yml
+  - docker/data-lakehouse/minio/docker-compose.yml
+  - docker/ml-module/docker-compose.yml
+  - docker/mlflow/docker-compose.yml
+
+networks:
+  lakehouse-net:
+    driver: bridge
+  redpanda-net:
+    driver: bridge
+  mqtt-net:
+    driver: bridge
+  questdb-net:
+    driver: bridge
+  ml-net:
+    driver: bridge

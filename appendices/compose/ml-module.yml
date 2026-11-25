@@ -1,0 +1,71 @@
+services:
+  # Batch job: Iceberg -> pandas -> sliding windows -> fitted scaler artifact.
+  # Guarded by the `ml` profile so `docker compose up -d` for the full stack
+  # never triggers training. Run explicitly with:
+  #   docker compose --profile ml run --rm ml-train
+  ml-train:
+    profiles: ["ml"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ml-module:0.1.0
+    container_name: ml-train
+    # Match the host owner of the bind-mounted artifacts directory.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    depends_on:
+      minio:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+    networks:
+      - lakehouse-net
+      - ml-net
+    volumes:
+      - ./artifacts:/app/ml-module/artifacts
+      - ../../ml-common:/app/ml-common:ro
+      - ../../schema:/app/schema:ro
+    environment:
+      - PYTHONPATH=/app/ml-module:/app/ml-common
+      # Reuses the shared root .env contract; never hardcodes endpoints.
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
+      - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
+      - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
+      - ML_GROUP_BY=${ML_GROUP_BY:-agv_id}
+      - ML_FEATURES=${ML_FEATURES:-}
+      - ML_SPLIT_STRATEGY=${ML_SPLIT_STRATEGY:-chronological}
+      - ML_SCALER_FILE=${ML_SCALER_FILE:-scaler.pkl}
+      - ML_START_DATE=${ML_START_DATE:-}
+      - ML_END_DATE=${ML_END_DATE:-}
+      - ML_WINDOW_SIZE=${ML_WINDOW_SIZE:-60}
+      - ML_WINDOW_STEP=${ML_WINDOW_STEP:-1}
+      - ML_TRAIN_SPLIT_RATIO=${ML_TRAIN_SPLIT_RATIO:-0.8}
+      - ML_ARTIFACTS_DIR=${ML_ARTIFACTS_DIR:-/app/ml-module/artifacts}
+      - ML_MODEL_FILE=${ML_MODEL_FILE:-model.pt}
+      - ML_METADATA_FILE=${ML_METADATA_FILE:-training_metadata.json}
+      - ML_MODEL_TYPE=${ML_MODEL_TYPE:-gru_autoencoder}
+      - ML_MODEL_HIDDEN_SIZE=${ML_MODEL_HIDDEN_SIZE:-64}
+      - ML_MODEL_LATENT_SIZE=${ML_MODEL_LATENT_SIZE:-32}
+      - ML_MODEL_NUM_LAYERS=${ML_MODEL_NUM_LAYERS:-2}
+      - ML_MODEL_DROPOUT=${ML_MODEL_DROPOUT:-0.1}
+      - ML_TRAIN_BATCH_SIZE=${ML_TRAIN_BATCH_SIZE:-64}
+      - ML_TRAIN_EPOCHS=${ML_TRAIN_EPOCHS:-50}
+      - ML_TRAIN_LEARNING_RATE=${ML_TRAIN_LEARNING_RATE:-0.001}
+      - ML_TRAIN_WEIGHT_DECAY=${ML_TRAIN_WEIGHT_DECAY:-0.00001}
+      - ML_TRAIN_SCHEDULER_PATIENCE=${ML_TRAIN_SCHEDULER_PATIENCE:-5}
+      - ML_TRAIN_SCHEDULER_FACTOR=${ML_TRAIN_SCHEDULER_FACTOR:-0.5}
+      - ML_TRAIN_MIN_LR=${ML_TRAIN_MIN_LR:-0.000001}
+      - ML_TRAIN_EARLY_STOPPING_PATIENCE=${ML_TRAIN_EARLY_STOPPING_PATIENCE:-10}
+      - ML_TRAIN_MIN_DELTA=${ML_TRAIN_MIN_DELTA:-0.0001}
+      - ML_TRAIN_DEVICE=${ML_TRAIN_DEVICE:-}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-agv-anomaly-detection}
+      - MLFLOW_REGISTERED_MODEL_NAME=${MLFLOW_REGISTERED_MODEL_NAME:-agv-anomaly-detector}
+    restart: "no"
+
+networks:
+  lakehouse-net:
+  ml-net:
