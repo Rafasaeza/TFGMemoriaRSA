@@ -54,7 +54,7 @@ $$
 
 On a straight cruise $\omega = 0$, so $v_w = v_x$. During a spot turn $v = 0$ while the outer wheel, and therefore the armature, still moves with the yaw.
 
-> **Implemented deviation — slip changes the ground step, not the rotor command.** Wheel wear leaves $\omega_m$ on the commanded wheel speed and scales the distance advanced this tick by the traction that remains. Bearing wear adds a small oscillation, about 0.3 Hz, on the tracked shaft speed and on that ground step. A blocked wheel sets rotor speed, yaw, and ground progress to zero.
+> **Implemented deviation — wheel wear lowers rolling resistance.** The worn tyre keeps the commanded wheel speed and the ground speed. A fraction of the new-tyre rolling resistance is removed and then stays, capped at a 20 % drop, so the same cruise draws less current. Bearing wear adds a small oscillation, about 0.3 Hz, on the tracked shaft speed. A blocked wheel sets rotor speed, yaw, and ground progress to zero.
 
 ### Thermal Dissipation Model
 
@@ -70,7 +70,7 @@ $$
 C_{th,bat} \frac{dT_{bat}(t)}{dt} = I_{bat}(t)^2 R_{int} - \frac{T_{bat}(t) - T_{amb}}{R_{th,bat}}
 $$
 
-A stator short multiplies the copper-heating term. Temperatures are integrated with the sub-step and clamped.
+Temperatures are integrated with the sub-step and clamped. There is no stator-short heating multiplier.
 
 ### Battery Equivalent Circuit Model (ECM)
 
@@ -86,7 +86,11 @@ $V_{ocv}$ is linear between the empty and full points. $R_{int}$ grows at low st
 
 ### Transducers
 
-Before a sample is written into the state message, the physical values pass through `sensors`: Gaussian noise, ADC quantisation, a thermistor bias that walks with operating time, and a Hall-current gain that drifts per hour. The encoder speed is quantised to one count of the configured bit width per second.
+Before a sample is written into the state message, the physical values pass through `sensors`: Gaussian noise, ADC quantisation, a thermistor bias that walks with operating time, and a Hall-current gain that drifts per hour. The encoder speed is quantised to one count of the configured bit width per second. Housing vibration gets the same class of Gaussian noise, with $\sigma = 0.02$ mm/s.
+
+### Housing vibration
+
+The state carries `vibration_rms` in mm/s. A housing accelerometer samples at several kilohertz. The state is published about once per second, so the simulator does not emit that waveform. Each electrical sub-step writes the RMS, and the state message copies the last sub-step plus the transducer noise. A healthy 1 m/s cruise reads about 1.5 mm/s and follows shaft speed. It falls to zero when the shaft is stopped and the rotor is free. Bearing wear roughly doubles the cruise reading. Gearbox wear raises it by about 30 % and stays below the bearing. A fully worn tyre makes it about 10 % quieter. A locked rotor leaves a hum of about 0.9 mm/s at the 60 A drive limit. Pack resistance does not move it.
 
 ## 3. Rust Implementation Strategy
 
@@ -96,16 +100,15 @@ Before a sample is written into the state message, the physical values pass thro
 
 ## 4. Fault Injection Engine
 
-Faults are triggered only by VDA 5050 instant actions: `injectFault`, `clearFaults`, `resetFaults`. Parameters are `faultType`, `duration`, and `intensity`. A positive duration makes a transient fault expire. A duration of 0 or less leaves a transient fault until `clearFaults`, and applies the whole damage of a degradation fault at once. A transient ramps up over its first two seconds.
+Faults are triggered only by VDA 5050 instant actions: `injectFault`, `clearFaults`, `resetFaults`. Parameters are `faultType`, `duration`, and `intensity`. A positive duration makes a transient fault expire. A duration of 0 or less leaves a transient fault until `clearFaults`, and applies the whole damage of a degradation fault at once. Only the mechanical stall is transient. The wear faults accumulate across the injection window and then stay.
 
-`clearFaults` ends the transients. It does not repair wear. `resetFaults` restores gearbox friction, wheel slip, bearing friction, and the pack resistance to the as-new values.
+`clearFaults` ends the stall. It does not repair wear. `resetFaults` restores gearbox friction, rolling resistance, bearing friction, and the pack resistance to the as-new values.
 
-- **Mechanical stall** (`mechanicalStall`): $\omega_m = 0$, back-EMF collapses, current goes to the drive limit, the winding heats, the bus sags, and the body stops. Transient.
-- **Gearbox degradation** (`gearboxDegradation`): additive shaft friction. Steady current and equilibrium temperature rise. Persistent.
-- **Wheel wear** (`wheelWear`): the wheel keeps the commanded speed, a fraction of that spin is slip, and the ground step shrinks. Extra rolling resistance raises current and temperature. Persistent. Slip is capped so the mission can still finish.
-- **Bearing degradation** (`bearingDegradation`): shaft friction grows across the injection and then stays. Tracked speed oscillates by a few percent at 0.3 Hz, which a 1 Hz sample still sees. Persistent.
-- **Stator short circuit** (`statorShortCircuit`): current ripple and a multiplier on the copper heating. Transient.
-- **Battery SOH degradation** (`batterySohDegradation`): multiplies $R_{int}$. The same current produces a deeper voltage sag, and the reported health falls as $100$ divided by that multiplier. Persistent.
+- **Mechanical stall** (`mechanicalStall`): $\omega_m = 0$, back-EMF collapses, current goes to the drive limit, the winding heats, the bus sags, and the body stops. The rotating vibration disappears and a hum of about 0.9 mm/s remains at the drive limit. It is the only fatal fault. Transient.
+- **Gearbox degradation** (`gearboxDegradation`): additive shaft friction. Steady current and equilibrium temperature rise, and housing vibration rises by about 30 % at 0.85 N·m, staying below a worn bearing. Persistent.
+- **Wheel wear** (`wheelWear`): rolling resistance falls and then stays, capped at a 20 % drop. Wheel speed and ground speed are unchanged, cruise current falls, and housing vibration eases by about 10 % at that cap. Persistent.
+- **Bearing degradation** (`bearingDegradation`): shaft friction grows across the injection and then stays. Tracked speed oscillates by a few percent at 0.3 Hz, which a 1 Hz sample still sees. Housing vibration roughly doubles at 0.35 N·m. Persistent.
+- **Battery SOH degradation** (`batterySohDegradation`): multiplies $R_{int}$. The same current produces a deeper voltage sag, and the reported health falls as $100$ divided by that multiplier. Housing vibration is unchanged. Persistent.
 
 Each active fault is also appended to the VDA 5050 `errors` array. The extended telemetry carries `fault_active` and the fault names.
 

@@ -4,9 +4,9 @@
 
 \section{Introduction}
 
-This chapter evaluates the functional fidelity, operational resilience, and throughput performance of the proposed predictive maintenance and anomaly detection platform. The evaluation assesses both the consistency of the generated telemetry with its electromechanical model and the stability of the distributed streaming lakehouse under a sustained synthetic workload.
+This chapter evaluates the operational resilience and throughput of the proposed predictive maintenance and anomaly detection platform. The evaluation reports the stability of the distributed streaming lakehouse under a sustained synthetic workload.
 
-\textit{(TO DO: the evaluation of the anomaly detector, covering reconstruction scores, classification thresholds, and the injected fault scenarios, will be added in a later revision of this chapter. No further tests are available yet. The sections below cover the simulator physics and a sustained run of the data pipeline.)}
+\textit{(TO DO: the evaluation of the anomaly detector, covering reconstruction scores, classification thresholds, and the injected fault scenarios, will be added in a later revision of this chapter. No further tests are available yet. The section below covers a sustained run of the data pipeline.)}
 
 \paragraph{Experimental Test Environment and Reproducibility.}
 To guarantee strict environment parity, reproducibility, and process isolation, the entire data platform is deployed as a containerized stack orchestrated via Docker Compose. Every functional component---including the native Rust-based vehicle simulator, the Eclipse Mosquitto MQTT broker, the Telegraf ingestion bridge, the Redpanda distributed streaming backbone, the Apache Spark Structured Streaming engines, the Apache Iceberg lakehouse on MinIO S3, the QuestDB time-series database, and the Grafana visualization service---executes within independent container boundaries connected through dedicated software-defined bridge networks.
@@ -39,11 +39,6 @@ Orchestration Tool        & Docker Compose v5.1.4 \\
 The virtualization architecture utilizes the Windows Subsystem for Linux (WSL2) backed by a lightweight Hyper-V hypervisor. Unlike traditional full-system virtual machines, WSL2 provides direct native hardware access to all 16 physical CPU cores without core pinning overhead, while dynamically allocating a bounded 31~GiB RAM slice dedicated to Docker containers. This ensures that the compute and memory benchmarks faithfully represent real-world bare-metal industrial edge deployment conditions.
 
 \clearpage
-
-\section{Testing: testing adjusted simulator}
-\label{sec:testing}
-
-\input{testingEvaluation/simulatorPhysicsValidation}
 
 \section{Evaluation: Data pipeline evaluation}
 \label{sec:data_pipeline_evaluation}

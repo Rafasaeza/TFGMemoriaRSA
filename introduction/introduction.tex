@@ -67,7 +67,7 @@ To address these challenges, this project aims to design and implement a fully d
 To achieve this overarching goal, the project is structured into five specific technical objectives:
 \begin{enumerate}
     \item \textbf{Adaptation of the VDA 5050\cite{vda5050standard} Simulator\cite{bostanciVda5050}:} 
-    Due to hardware constraints and limited access to physical AGVs, utilizing real industrial data is often unfeasible. Therefore, a Rust-based VDA 5050 simulator is to be adapted to generate realistic telemetry streams. The simulation is extended beyond pure protocol compliance to model real-world robot physics and key health metrics, including motor current, motor voltage, motor temperature, linear velocity, and battery state. Generative AI tool(Claude Sonnet 5.0) is to be leveraged to assist in extending the Rust codebase.
+    Due to hardware constraints and limited access to physical AGVs, utilizing real industrial data is often unfeasible. Therefore, a Rust-based VDA 5050 simulator is to be adapted to generate realistic telemetry streams. The simulation is extended beyond pure protocol compliance to model real-world robot physics and key health metrics, including motor current, motor voltage, motor temperature, linear velocity, and battery state. NOVA, provided by EDAG, and Google Gemini assist the extension of the Rust codebase. A proposal is kept only after it matches the specification and passes the tests of the physical relations.
 
     \item \textbf{Real-Time Data Pipeline Implementation:} 
     To process raw telemetry streams before they reach downstream machine learning components, Apache Spark\cite{apache_spark} is used to ingest raw streams, cleanse null fields, append ingestion timestamps, and standardize data structures. Cleaned events are to be published to a Redpanda\cite{redpanda} event broker. This Kafka-compatible streaming layer decouples system modules, allowing independent producers and consumers to interact seamlessly.
@@ -133,7 +133,7 @@ This document is organized into eight main chapters, including this introductory
     
     \item \textbf{System Implementation (Chapter~\ref{chap:system_implementation}):} Describes how each layer is built and deployed, including the containers, the simulator, the streaming jobs, storage, training and inference, the dashboards, and the supporting utilities.
     
-    \item \textbf{Testing and Evaluation (Chapter~\ref{chap:testing_evaluation}):} Reports the validation of the simulator physics and a sustained run of the data pipeline. The evaluation of the detector itself remains to be written.
+    \item \textbf{Testing and Evaluation (Chapter~\ref{chap:testing_evaluation}):} Reports a sustained run of the data pipeline. The evaluation of the detector itself remains to be written.
     
     \item \textbf{Conclusions and Future Work (Chapter~\ref{chap:conclusions}):} The synthesis of the results is left to be written with the final evaluation. The chapter already records the future work on central authentication, encrypted communications, and a deployment on Kubernetes.
     

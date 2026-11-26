@@ -74,194 +74,113 @@ If the system were migrated to a different Kafka-compatible broker, only the end
 
 No changes to the Spark jobs, data processing logic or container images would be required.
 
-\section{Source Systems: Vehicle Simulation and Physical Modeling} 
+\section{Source Systems: Vehicle Simulation and Physical Modelling}
 \label{sec:source_system_simulation}
-\label{sec:physical_modeling} 
+\label{sec:physical_modeling}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_source_systems}.}
-This section describes the implementation of the source systems layer, the origin of truth of the platform. It covers the containerized deployment of the extended vehicle simulator, the electromechanical, kinematic, thermal and battery model that governs the generated telemetry, the physical fault-injection and transducer models, and the resulting telemetry channels published as VDA~5050 payloads.
+This section describes how the source layer of the platform is built. That layer is the source of truth for the telemetry consumed by every later stage. The account covers the container that runs the extended vehicle simulator, the electromechanical, kinematic, thermal and battery model that produces the telemetry, the noise added by each instrument, and the physical faults together with the labels that mark an injection.
 
-\subsection{Simulator Architecture and Containerized Deployment}
+\subsection{Simulator Architecture and Containerised Deployment}
 \label{subsec:simulator_deployment}
 
-The source system layer is currently implemented using a modified version of the \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050}. The simulator executes inside a dedicated container and connects to the MQTT broker through the shared \texttt{mqtt-net} network. 
+The source layer runs a modified copy of the \texttt{vda5050\_vehicle\_simulator} \cite{bostanciVda5050}. The simulator executes in its own container and reaches the MQTT broker on the shared \texttt{mqtt-net} network.
 
-The service file is Listing~\ref{lst:vda5050-simulator-docker-compose}. The \texttt{depends\_on} directive combined with Docker health checks guarantees that the simulator starts only after the broker has become available. Listing~\ref{lst:simulator-override} adds the build context used in this repository. 
+Listing~\ref{lst:vda5050-simulator-docker-compose} gives the service definition. The \texttt{depends\_on} condition, together with the broker health check, holds the simulator until the broker can accept a connection. Listing~\ref{lst:simulator-override} supplies the build context used in this repository.
 
+Fleet size, the broker address and the rate of the state message are read from a configuration file, rather than written into the source. Each simulated vehicle then publishes a VDA~5050 state on its own topic.
 
-The simulator configuration is loaded from a dedicated configuration file that defines fleet parameters, MQTT communication settings, and telemetry generation properties. During execution, each simulated AGV periodically publishes VDA 5050-compliant state messages to the MQTT broker. 
+The simulator, as originally published, spoke the protocol and did not model a powertrain. The extension adds motor, battery and drivetrain channels, so that the published state carries the correlations an autoencoder can learn, while the message remains a valid VDA~5050 state.
 
-To support the anomaly detection use case, the original simulator was extended with additional telemetry channels representing motor, battery, and drivetrain behavior. These extensions enable the generation of realistic training data for machine learning workloads while preserving compatibility with the VDA 5050 communication standard.
+\subsection{Idea of the Simulated Robot}
+\label{subsec:simulated_robot}
 
-To provide physically consistent telemetry for anomaly recognition, the kinematic simulation of the automated guided vehicle (AGV) is extended with an electromechanical powertrain model. The objective is not to replicate every microscopic effect of a physical robot, but to capture the dominant coupling between trajectory demands, mechanical loads, electrical responses, and thermal dissipation.
+The kinematic simulation of the automated guided vehicle (AGV) is extended with an electromechanical powertrain model, so that the telemetry offered to anomaly recognition is physically consistent. The aim is not to reproduce the robot, or its faults, in full. The model keeps the correlations a healthy vehicle would show, between the demanded trajectory, the mechanical load, the electrical response and the heat, so that an autoencoder can learn them. A fault is a case in which those healthy correlations no longer hold.
 
-Figure~\ref{fig:agv-simulated-sensors} places the instruments that this model publishes, so the equations below can be read against the part of the vehicle they describe. The battery pack and the traction motor are separate nodes of one differential-drive chassis, with a single motor commanded at the outer wheel. On the pack, a Hall sensor on the output cable reads the battery current, the terminal posts read the battery voltage, and a thermistor between the cells reads the pack temperature. On the drive, a second Hall sensor on the armature DC link reads the motor current, the motor terminals read the armature voltage, a probe in the copper windings reads the stator temperature, and a toothed ring on the motor shaft reads the rotor speed. An accelerometer on the motor housing reads the vibration RMS (\texttt{vibration\_rms}, in mm/s). While the bearing is healthy and the rotor is free, that reading tracks rotor speed, about $1.5\,\mathrm{mm/s}$ at the $1\,\mathrm{m/s}$ cruise, and it falls to zero when the shaft is stopped. Torque, mechanical power and back-EMF are computed from those states. They are not additional probes. State of charge and state of health remain on the standard VDA~5050 \texttt{batteryState} object.
+Figure~\ref{fig:agv-simulated-sensors} places the instruments that this model publishes. The battery pack and the traction motor are separate nodes of one differential-drive chassis, with a single motor commanded at the outer wheel. On the pack, a Hall sensor on the output cable reads the battery current, the terminal posts read the battery voltage, and a thermistor between the cells reads the pack temperature. On the drive, a second Hall sensor on the armature cable reads the motor current, a voltmeter across the motor terminals reads the armature voltage, a thermistor in the copper windings reads the winding temperature, and an encoder counts the teeth of a ring on the motor shaft, and that count is the rotor speed. An accelerometer on the motor housing reads the vibration RMS. While the bearing is healthy and the rotor is free, that reading tracks rotor speed, about $1.5\,\mathrm{mm/s}$ at the $1\,\mathrm{m/s}$ cruise, and it falls to zero when the shaft is stopped. Torque, mechanical power and back-EMF are computed from those states. They are not additional probes. State of charge and state of health remain on the standard VDA~5050 \texttt{batteryState} object.
 
-On a vehicle the housing accelerometer is the one instrument that is not slow. Bearing impacts and gear-mesh vibration sit between a few hundred hertz and a few kilohertz, and the card that reads them samples at several kilohertz. A condition-monitoring system does not archive that waveform. It reduces it to a broadband velocity RMS in millimetres per second, the severity quantity of ISO~20816, integrated over about one second and then trended slowly. The simulator already publishes one VDA~5050 state every $1.05\,\mathrm{s}$, and every later stage of the platform keeps that rate, so a kilohertz series would not change any stored sample. The same reason given below for neglecting $L_a dI_m/dt$, a transient much shorter than the reporting period, applies here. The model therefore emits the RMS itself. Each $1\,\mathrm{ms}$ electrical sub-step evaluates
-\begin{equation}
-    v_{\mathrm{rms}}(t)
-    =
-    |\omega_m(t)|\, a_{\mathrm{vib}}
-    \left(1 + k_b \tau_b + k_g \tau_g\right)
-    \max\!\left(0,\, 1 - k_w \Delta C_{rr}\right)
-    +
-    \begin{cases}
-        a_{\mathrm{stall}} \max(I_m, 0) & \text{if the wheel is locked},\\
-        0 & \text{otherwise,}
-    \end{cases}
-    \label{eq:vibration_rms}
-\end{equation}
-and the state message copies the last sub-step, then adds Gaussian transducer noise with $\sigma = 0.02\,\mathrm{mm/s}$. The published RMS is a sample of the plant, as the motor current is, not a one-second average computed inside the simulator. On a cruise the plant is steady, so the two coincide. Here $\tau_b$ and $\tau_g$ are the bearing and gearbox friction torques, and $\Delta C_{rr}$ is the fraction removed from the new-tyre rolling resistance. The gain $a_{\mathrm{vib}} = 0.015\,\mathrm{mm/s}$ per rad/s places a healthy $1\,\mathrm{m/s}$ cruise, $|\omega_m| \approx 100\,\mathrm{rad/s}$, near $1.5\,\mathrm{mm/s}$. Bearing friction weights that baseline by $k_b = 3.0$ per N·m, so $0.35\,\mathrm{N\cdot m}$ about doubles the cruise reading. Gearbox friction weights it by $k_g = 0.35$ per N·m, about $+30\,\%$ at $0.85\,\mathrm{N\cdot m}$, and stays below the bearing. Wheel wear multiplies the rotating term by $(1 - k_w \Delta C_{rr})$ with $k_w = 0.50$, so the $0.20$ tread-loss cap is about $10\,\%$ quieter. While the wheel is locked, $\omega_m = 0$ and only the second term remains: $a_{\mathrm{stall}} = 0.015\,\mathrm{mm/s}$ per ampere, about $0.9\,\mathrm{mm/s}$ at the $60\,\mathrm{A}$ drive limit. Pack resistance does not enter. Bearing-pass frequencies and the gear-mesh line are absent. The slow signature that the one-hertz sample can still show is the $0.3\,\mathrm{Hz}$ speed wobble of a worn bearing.
+The reading that leaves an instrument is not the bare physical value. Gaussian noise is added on every channel. Current and voltage are then quantised by an analogue-to-digital converter, and rotor speed is quantised to the encoder count. The winding-temperature reading walks by $0.02\,^{\circ}\mathrm{C}$ per hour of operation, and the Hall gain on the motor current drifts by $0.1\,\%$ per hour. Battery temperature and battery current receive noise only.
 
-The same figure marks the parts a fault is allowed to change. These marks are not extra instruments. Gearbox degradation adds friction at the reduction gears and lifts the housing vibration by the smaller $k_g$ term of Equation~\eqref{eq:vibration_rms}. Bearing degradation adds friction on the motor-shaft bearing, a small speed wobble, and the larger $k_b$ rise above the speed line. Wheel wear lowers the rolling resistance of the driven tyre, so the same cruise draws less current and the housing is slightly quieter. A mechanical stall locks that wheel: the rotating term disappears and the current-proportional hum remains. Battery state-of-health degradation raises the internal resistance of the pack and leaves the vibration channel unchanged. Section~\ref{subsec:fault_injection} states how each of these disturbances enters the equations.
+The same figure also marks the parts of the robot used to represent anomalies. The selected faults are described in Section~\ref{subsec:fault_injection}.
 
-\begin{figure}[ht]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{agvSimulatedSensors.jpg}
-  \caption{Simulated instruments and fault sites on the vehicle. Battery current, terminal voltage and cell temperature are read on the pack. Motor current, armature voltage, stator temperature, shaft speed and housing vibration are read on the single traction drive. The gearbox, the shaft bearing and the driven wheel are the mechanical parts a fault can change. Torque, power and back-EMF are computed and have no probe.}
+  \caption{Simulated instruments and fault sites on the vehicle. Battery current, terminal voltage and cell temperature are read on the pack. Motor current, armature voltage, winding temperature, shaft speed and housing vibration are read on the single traction drive. The gearbox, the shaft bearing and the driven wheel are the mechanical parts a fault can change. Torque, power and back-EMF are computed and have no probe.}
   \label{fig:agv-simulated-sensors}
 \end{figure}
 
 \subsection{Motor and Drivetrain Dynamics}
 
-The traction drive is modeled as an equivalent permanent-magnet DC (PMDC) machine coupled to a reduction gearbox ($i_g$) and driven wheel ($r_w$).
+The traction drive is one permanent-magnet DC motor, a reduction gearbox and one driven wheel. The formulas used in this subsection and in the three that follow are collected in the simulator specification, Listing~\ref{lst:simulator-prompt}.
 
-The electrical armature circuit is governed by:
-\begin{equation}
-    V_m(t) = R_a(T_m) I_m(t) + L_a \frac{dI_m(t)}{dt} + K_e \omega_m(t)
-    \label{eq:armature_base}
-\end{equation}
-where $V_m$ is the armature terminal voltage, $I_m$ the armature current, $R_a(T_m)$ the winding resistance, $K_e$ the back-EMF constant, and $\omega_m$ the rotor speed.
+The chopper applies a voltage to the armature. Inside the winding that voltage meets two terms: the drop in the copper, and the voltage the winding itself generates as it spins. The armature inductance is omitted. Its transient lasts about 40~ms, which is much shorter than the one-second state message, so a published sample would not show it. 
 
-\paragraph{Quasi-static approximation ($L_a \approx 0$):}
-Because the electrical time constant ($\tau_e = L_a / R_a \approx 40\,\mathrm{ms}$) is much shorter than the mechanical time constant ($\tau_m \approx 1\text{--}3\,\mathrm{s}$) and the state reporting rate, the inductive transient $L_a \frac{dI_m}{dt}$ is neglected. This yields the quasi-static relationship:
-\begin{equation}
-    V_m(t) = R_a(T_m) I_m(t) + K_e \omega_m(t)
-\end{equation}
+Torque is proportional to the armature current. The mission commands the shaft speed, and the current is whatever that speed requires in torque. The torque is the rolling resistance, which rises with the weight of a carried pallet, together with the extra force used while the vehicle speeds up. The gearbox brings both quantities back to the shaft. The floor is flat and the vehicle carries its load, so the slope and the towed force remain zero. A worn gearbox or a worn bearing adds friction on the shaft; on a healthy robot that term is zero. A further small drag grows with shaft speed.
 
-Electromagnetic torque follows:
-\begin{equation}
-    \tau_m(t) = K_t I_m(t)
-    \label{eq:electromagnetic_torque}
-\end{equation}
-where $K_t$ is the torque constant. The mechanical torque balance at the motor shaft is:
-\begin{equation}
-    J_m \frac{d\omega_m(t)}{dt} + B_m \omega_m(t) = \tau_m(t) - \frac{\tau_L(t)}{\eta_g i_g} - \tau_{\mathrm{friction}}
-    \label{eq:torque_balance}
-\end{equation}
-where $J_m$ is rotor inertia, $B_m$ viscous friction, $\eta_g$ gearbox efficiency, and $\tau_{\mathrm{friction}}$ unmodeled or degraded drivetrain friction. The wheel load torque $\tau_L(t)$ aggregates rolling resistance, road grade, vehicle acceleration, and drawbar forces:
-\begin{equation}
-    \tau_L(t) = r_w \left[ C_{rr} m_{\mathrm{total}} g \cos\theta + m_{\mathrm{total}} a(t) + m_{\mathrm{total}} g \sin\theta + F_{\mathrm{drawbar}} \right]
-\end{equation}
-where $m_{\mathrm{total}} = m_{\mathrm{chassis}} + m_{\mathrm{payload}}$ is the total vehicle mass.
+On a vehicle the housing accelerometer is the one instrument that is not slow: it samples at several kilohertz. A condition-monitoring system does not archive that waveform. It reduces the record to a broadband velocity RMS in millimetres per second, the severity quantity of ISO~20816 \cite{iso20816}, taken over about one second and then watched over minutes and hours. The simulator publishes one VDA~5050 state every $1.05\,\mathrm{s}$, and every later stage of the platform keeps that rate, so a kilohertz series would not change any stored sample. The fast waveform is therefore omitted, as the armature inductance is, and the model emits the RMS directly. Each electrical step of $1\,\mathrm{ms}$ overwrites that value; the state copies the latest one and adds Gaussian noise of $\sigma = 0.02\,\mathrm{mm/s}$. On a steady cruise every step writes the same number, so the copied value is the cruise RMS. A healthy $1\,\mathrm{m/s}$ cruise reads about $1.5\,\mathrm{mm/s}$ and follows shaft speed. The reading falls to zero when the shaft is stopped and the rotor is free. A worn bearing roughly doubles the cruise value. Gearbox wear raises it by about $30\,\%$ and remains below the bearing. A fully worn tyre makes the reading about $10\,\%$ lower. A locked rotor leaves a steady hum of about $0.9\,\mathrm{mm/s}$ at the $60\,\mathrm{A}$ limit. Pack resistance does not move the reading.
 
 \subsection{Chassis Motion and Drivetrain Kinematics}
 
-The mission layer moves the vehicle as a differential-drive chassis. The velocity published in the VDA~5050 \texttt{velocity} object is the body frame, and it is not the rotor speed $\omega_m$ of the motor model above. Lateral velocity is identically zero: the chassis does not sideslip. Forward speed $v_x$ is the ground speed along the heading, and the yaw rate $\omega$ is its own state,
-\begin{equation}
-    v_y(t) = 0, \qquad v_x(t) = v_{\mathrm{ground}}(t), \qquad \dot\theta(t) = \omega(t).
-    \label{eq:body_velocity}
-\end{equation}
-Each tick, $\omega$ slews toward a yaw command and never faster than the configured angular acceleration $\alpha = 1\,\mathrm{rad/s^2}$. The command is the largest rate that can still stop inside the remaining heading error $\Delta\theta$ toward the next node, and it is capped at $\omega_{\max} = 1\,\mathrm{rad/s}$:
-\begin{equation}
-    \omega^{\star}(t) = \mathrm{sign}(\Delta\theta)\,
-    \min\!\left(\omega_{\max},\, \sqrt{2\alpha\,|\Delta\theta|}\right).
-    \label{eq:yaw_command}
-\end{equation}
-When $|\Delta\theta| > 0.35\,\mathrm{rad}$ the forward speed is held at zero and the vehicle yaws in place. Below that threshold it drives and trims the heading while moving. A corner of the factory graph is therefore a spot turn of a couple of seconds. On the one-hertz trace, $\omega$ rises and falls; it does not step to $\pm 1\,\mathrm{rad/s}$ in a single sample.
+The mission layer moves the vehicle as a differential-drive chassis. The velocity published in the VDA~5050 \texttt{velocity} object is the motion of the body, and it is not the rotor speed of the motor. The chassis does not move sideways. Forward speed is the ground speed along the heading. The yaw rate is kept from one tick to the next: each tick of 50~ms may change it by at most $1\,\mathrm{rad/s^2}$, and it never passes $1\,\mathrm{rad/s}$. The commanded rate is the fastest yaw that can still stop on the heading of the next node. When the heading error is larger than about $20^\circ$, forward speed is held at zero and the vehicle turns in place. Below that threshold the vehicle drives, and the remaining angle is corrected while it moves. A corner of the factory graph is therefore a spot turn of a couple of seconds. On the one-hertz trace the yaw rate rises and falls across more than one sample.
 
-The equivalent motor does not track $v_x$. It tracks the outer wheel of a pair whose track is $b = 0.50\,\mathrm{m}$. The command uses the forward speed $v$ that the mission layer is ramping:
-\begin{equation}
-    v_w(t) = |v(t)| + |\omega(t)|\,\frac{b}{2}.
-    \label{eq:outer_wheel}
-\end{equation}
-The gearbox then closes that wheel speed on the rotor, with reduction $i_g$ and wheel radius $r_w$:
-\begin{equation}
-    v_w(t) = \frac{\omega_m(t)}{i_g}\, r_w.
-    \label{eq:wheel_closure}
-\end{equation}
-Published $v_x$ is the speed made good over the ground. With full traction, $v_x = v$. On a straight cruise $\omega = 0$, so $v_w = v_x$. With $i_g = 10$ and $r_w = 0.10\,\mathrm{m}$, a $1\,\mathrm{m/s}$ cruise puts the rotor near $100\,\mathrm{rad/s}$. During a spot turn $v = 0$ while $v_w = |\omega|\,b/2$, so armature current and \texttt{motor\_speed\_rad\_s} move with the yaw even though the chassis is not translating. Wheel wear, defined below, lowers rolling resistance and leaves both this commanded wheel speed and the ground speed unchanged. A blocked wheel sets both $\omega_m$ and the body yaw to zero, so the rotating term of Equation~\eqref{eq:vibration_rms} collapses.
+The motor does not follow the forward speed. It follows the outer wheel of a pair whose track is $0.50\,\mathrm{m}$, that is, the forward speed plus the extra path of the wheel on the outside of the turn. The turn itself is written on the chassis. The motor speed is the electrical consequence of that turn, standing in for the faster of the two wheels. The gearbox converts the wheel speed into rotor speed, with a reduction of 10 and a wheel radius of $0.10\,\mathrm{m}$. On a straight cruise the two wheel speeds coincide, and $1\,\mathrm{m/s}$ puts the rotor near $100\,\mathrm{rad/s}$. During a spot turn the chassis is not translating, so the published forward speed is zero, while the outer wheel and the armature still turn with the yaw, near $25\,\mathrm{rad/s}$ at the $1\,\mathrm{rad/s}$ cap. Wheel wear, defined below, lowers the rolling resistance. The commanded wheel speed and the ground speed stay the same, and the same cruise draws less current, because the tyre rolls more easily. A blocked wheel stops the rotor and the yaw, so the rotating part of the vibration disappears.
 
 \subsection{Thermal Dissipation Models}
 
-Winding resistance increases with copper temperature:
-\begin{equation}
-    R_a(T_m) = R_{a0} \left[ 1 + \alpha (T_m(t) - T_0) \right]
-\end{equation}
-where $R_{a0}$ is the baseline resistance at temperature $T_0$, and $\alpha$ is the copper temperature coefficient.
-
-The thermal dynamics of the motor are modeled as a lumped first-order node accounting for Joule heating, core iron losses (Steinmetz formulation), and convective heat transfer to the ambient environment ($T_{\mathrm{amb}}$):
-\begin{equation}
-    C_{\mathrm{th}} \frac{dT_m(t)}{dt} = I_m(t)^2 R_a(T_m) + C_{fe} \omega_m(t)^{1.6} B_{\max}^2 - \frac{T_m(t) - T_{\mathrm{amb}}}{R_{\mathrm{th}}}
-\end{equation}
-Similarly, the battery pack temperature $T_{\mathrm{bat}}(t)$ accounts for internal resistive heating:
-\begin{equation}
-    C_{\mathrm{th,bat}} \frac{dT_{\mathrm{bat}}(t)}{dt} = I_{\mathrm{bat}}(t)^2 R_{\mathrm{int}} - \frac{T_{\mathrm{bat}}(t) - T_{\mathrm{amb}}}{R_{\mathrm{th,bat}}}
-\end{equation}
+The resistance of the copper rises as the winding warms. The winding is treated as a single thermal mass: current heats it, spinning adds the iron losses, and the heat leaves to the surrounding air. The battery pack is a second mass, heated by the current through its internal resistance and cooled in the same way. Neither mass is divided into a core and a housing. The temperature that is published is the interior one, the copper of the winding or the interior of the pack, and that same mass is what cools to the air.
 
 \subsection{Battery Equivalent Circuit Model (ECM)}
 
-Battery terminal voltage $V_{\mathrm{bat}}(t)$ is represented by an ohmic equivalent circuit:
-\begin{equation}
-    V_{\mathrm{bat}}(t) = V_{\mathrm{ocv}}(SOC) - I_{\mathrm{bat}}(t) R_{\mathrm{int}}(SOC, T_{\mathrm{bat}})
-    \label{eq:battery_ecm}
-\end{equation}
-where open-circuit voltage $V_{\mathrm{ocv}}(SOC)$ scales with state of charge ($SOC$), and internal resistance $R_{\mathrm{int}}$ varies with $SOC$, temperature, and battery degradation. While discharging, state of charge follows Coulomb counting scaled by a wall-clock factor $k_{\mathrm{dis}}$ (\texttt{discharge\_multiplier}):
-\begin{equation}
-    \frac{dSOC(t)}{dt} = -\frac{I_{\mathrm{bat}}(t)}{Q_{\mathrm{nom}}} \cdot 100 \cdot k_{\mathrm{dis}}
-    \label{eq:soc_coulomb}
-\end{equation}
-$k_{\mathrm{dis}} = 1$ is the unscaled count. Charging is not multiplied: the charger current is $k_C Q_{\mathrm{nom}}$ at the configured C-rate $k_C = 0.5$ ($0.5\mathrm{C}$). The factor changes only the slope of state of charge. Current, voltage and temperature stay those of the electrical model. The fleet runs at $k_{\mathrm{dis}} = 2$. Continuous driving then drains the pack at about $12\,\%/\mathrm{h}$, eight hours from full to empty. On the factory duty cycle the current is lower, because a vehicle is not at cruise for the whole shift. A half-hour probe of the five vehicles on 24 November 2026 (11:18--11:48~UTC, after the line warm-up) measured $7.4$ to $10.2\,\%/\mathrm{h}$, with a fleet mean of $8.7\,\%/\mathrm{h}$. The packs started near full charge, so the window contains no docking: $68\,\%$ of the samples are moving and $32\,\%$ are stopped. The orchestrator docks a vehicle at $20\,\%$ and releases it near $100\,\%$. That charge takes about $1.65\,\mathrm{h}$ and, at the measured slope, is about $15\,\%$ of the cycle. An earlier capture used $k_{\mathrm{dis}} = 20$ to compress calendar time. That accelerated trace is not the regime the simulator now publishes, and the scaler fitted on it is replaced when the model is retrained on the unaccelerated shift. The published \texttt{batteryCharge} is rounded to two decimal places. The coulomb counter keeps the unrounded state: at $k_{\mathrm{dis}} = 2$ a typical pack moves less than $0.005\,\%$ between state messages, and writing the rounded value back would erase the discharge. At or below $1\,\%$ SoC the drive stops, new orders are rejected and the vehicle publishes a fatal \texttt{BATTERY\_DEPLETED} error until the pack is charged back above that cutoff.
+The voltage at the pack terminals is the open-circuit voltage minus the drop across the internal resistance. The open-circuit voltage follows the state of charge. The resistance grows when the pack is nearly empty and when it is cold.
 
-\paragraph{Omission of the polarization branch ($V_{\mathrm{pol}}$):}
-A complete 1-RC ECM introduces a capacitive polarization branch ($\frac{dV_{\mathrm{pol}}}{dt} = -\frac{V_{\mathrm{pol}}}{R_p C_p} + \frac{I_{\mathrm{bat}}}{C_p}$). This branch is deliberately omitted, and its transfer resistance $R_p$ is folded into $R_{\mathrm{int}}$ ($0.035 + 0.015 = 0.050\,\Omega$). 
-\emph{Justification:} Detailed $R_p/C_p$ parameters cannot be calibrated without dedicated electrochemical pulse tests, and the polarization branch accounts for less than 20\% of total voltage sag. In a purely ohmic model, the load-step response is directly proportional to $I_{\mathrm{bat}} \cdot R_{\mathrm{int}}$, producing a clean, unambiguous signature for battery state-of-health (SOH) degradation without masking other anomalies.
+A fuller battery model would add a capacitive polarisation branch, a voltage that builds and decays over seconds after a change of current. That branch is left out. It cannot be calibrated without pulse tests, and it is the smaller part of the sag. Its resistance is folded into the internal resistance, $0.050\,\Omega$. What remains is a sag that appears and disappears with the current.
 
-\subsection{Physical Fault Injection and Transducer Emulation}
+While discharging, state of charge falls in proportion to the current drawn, scaled by a wall-clock factor $k_{\mathrm{dis}}$ (\texttt{discharge\_multiplier}). $k_{\mathrm{dis}} = 1$ is the unscaled count. Charging is not multiplied. The charger is set to half the current that would fill the pack in one hour, called $0.5\mathrm{C}$, so a full charge takes about two hours. The factor changes only the slope of state of charge. Current, voltage and temperature stay those of the electrical model. The fleet runs at $k_{\mathrm{dis}} = 2$. Continuous driving then drains the pack at about $12\,\%/\mathrm{h}$, about eight hours from full to empty. The orchestrator sends a vehicle to charge at $20\,\%$ and releases it at about $95\,\%$, with a hard stop at full charge. From $20\,\%$ to that release the charge takes about $1.5\,\mathrm{h}$. At or below $1\,\%$ state of charge the drive stops, new orders are rejected, and the vehicle publishes a fatal \texttt{BATTERY\_DEPLETED} error until the pack is charged back above that cutoff.
+
+\subsection{Physical Fault Injection}
 \label{subsec:fault_injection}
 
-Rather than injecting synthetic noise into high-level features, faults perturb the physical equations directly:
-\begin{itemize}
-    \item \textbf{Mechanical Stall:} Imposes $\omega_m = 0$ and holds the body yaw $\omega$ at zero, because the same wheels produce both. Back-EMF collapses ($E_b = 0$) and the current surges to the drive limit, with a rapid thermal rise and battery voltage sag. In Equation~\eqref{eq:vibration_rms} the rotating term is zero and the locked-rotor hum remains, about $0.9\,\mathrm{mm/s}$ at the $60\,\mathrm{A}$ limit.
-    \item \textbf{Wheel Wear} (\texttt{wheelWear}): A fraction of the new-tyre rolling resistance is removed and then stays, capped at a $20\,\%$ drop. Ground speed and wheel speed are unchanged. The same cruise draws less current because a worn tread rolls more easily, and the rotating vibration falls by about $10\,\%$ at that cap. The drive does not stall.
-    \item \textbf{Bearing Degradation} (\texttt{bearingDegradation}): Shaft friction grows across the injection window and then stays, raising current and temperature. The tracked speed is modulated by a few percent at $0.3\,\mathrm{Hz}$, a wobble that remains visible in the $1\,\mathrm{Hz}$ sample. Housing vibration rises by the $k_b$ term of Equation~\eqref{eq:vibration_rms}, about double at $0.35\,\mathrm{N\cdot m}$. Gearbox friction uses the smaller $k_g$ and does not wobble the shaft, so the two wear modes stay separable on this channel.
-    \item \textbf{Gearbox Degradation:} Injects an additive friction torque $\tau_{\mathrm{friction}}$, increasing steady-state current and operating temperature, and the milder vibration rise of Equation~\eqref{eq:vibration_rms} (about $+30\,\%$ at $0.85\,\mathrm{N\cdot m}$).
-    \item \textbf{Battery SOH Degradation:} Multiplies $R_{\mathrm{int}}$, producing pronounced voltage drops during acceleration steps. It does not enter Equation~\eqref{eq:vibration_rms}.
-\end{itemize}
+A fault changes the physical model. It is not noise laid over the published channels. The healthy correlations are what the autoencoder is trained to reconstruct, and a fault is a case in which those correlations no longer hold. The separation between a worn bearing and a worn gearbox is chosen so that a one-hertz trace can still tell them apart: a real diagnosis would use the high-frequency signature of each, which this state message does not carry.
 
-Finally, physical states are conditioned through transducer models (Gaussian noise, ADC quantization, and thermal/gain drift) to generate realistic diagnostic telemetry for anomaly detection algorithms.
+The fault console of the factory orchestrator performs the injection. Section~\ref{subsec:factory-orchestrator-implementation} describes that Node-RED service. The operator selects one vehicle, one fault, a duration in seconds and a severity between 0 and 1. The console sends an \texttt{injectFault} instant action, after converting the severity into the physical intensity of that fault. A stall ignores the severity, and the wheel is locked for the stated duration. For the four wear faults the duration is the window over which the damage accumulates; when the window ends, the damage remains. Two further actions carry no magnitude. \texttt{clearFaults} ends the stall and leaves the wear in place. \texttt{resetFaults} restores the gearbox, the tyre, the bearing and the pack resistance, and returns the state of charge to full.
 
-\subsection{Synthesized Telemetry Channels and Payload Mapping}
-\label{sec:synthetic_dataset_generation}
-
-The physical states computed by the model are serialized into the extended VDA~5050 telemetry payload published by each simulated vehicle. These sensor channels are grouped in a single \texttt{information} element of type \texttt{motor\_telemetry}, whose keys are emitted in a fixed order that forms part of the downstream data contract. The extended telemetry channels incorporated into the simulator are:
+While an injection is in progress, the state carries two labels, \texttt{fault\_active} and \texttt{fault\_types}. They identify the fault that is active, and they are not instrument readings. When the window ends, a wear fault remains in the plant and the two labels clear, so they mark the injection rather than the damage that stays.
 
 \begin{itemize}
-    \item Motor current ($I_m$) (\texttt{motor\_current})
-    \item Motor voltage ($V_m$) (\texttt{motor\_voltage})
-    \item Motor temperature ($T_m$) (\texttt{motor\_temp})
-    \item Motor angular velocity ($\omega_m$) (\texttt{motor\_speed\_rad\_s})
-    \item Motor torque ($\tau_m$) (\texttt{motor\_torque\_nm})
-    \item Back-electromotive force ($E_b$) (\texttt{back\_emf\_v})
-    \item Motor power ($P_m$) (\texttt{motor\_power\_w})
-    \item Battery current ($I_{bat}$) (\texttt{battery\_current\_a})
-    \item Battery temperature ($T_{bat}$) (\texttt{battery\_temp\_c})
-    \item Active fault flag (\texttt{fault\_active})
-    \item Active fault types (\texttt{fault\_types})
-    \item Housing vibration RMS (\texttt{vibration\_rms})
+    \item \textbf{Mechanical stall} (\texttt{mechanicalStall}). The wheel locks. The shaft stops, and the yaw stops with it, because the same wheels produce both. It is the only fatal fault, and it lasts only while it is injected.
+    \item \textbf{Wheel wear} (\texttt{wheelWear}). Part of the rolling resistance is removed and then left in place, up to a fifth of the value for a new tyre. The tyre rolls more easily. The route and the wheel speed do not change.
+    \item \textbf{Bearing wear} (\texttt{bearingDegradation}). Friction is added on the shaft and left in place. The shaft speed varies by a few percent, about once every three seconds, and the housing vibration roughly doubles.
+    \item \textbf{Gearbox wear} (\texttt{gearboxDegradation}). A steady friction is added on the shaft and left in place. The shaft speed remains smooth. The housing vibration rises by less, about $30\,\%$ at the usual injection, and the absence of that speed variation is what separates it from a worn bearing.
+    \item \textbf{Battery ageing} (\texttt{batterySohDegradation}). The internal resistance is raised and left in place. The same current pulls the terminal voltage down further.
 \end{itemize}
 
-These variables were selected because they are commonly used in predictive maintenance, condition monitoring, and fault diagnosis applications for electrically driven industrial vehicles. The two \texttt{fault\_*} channels carry the ground-truth identifiers of any injected anomaly, which is useful as a weak label for the detection pipeline. Battery state of charge, state of health and terminal voltage are intentionally not duplicated in this list: they continue to be reported through the standard VDA~5050 \texttt{batteryState} object. 
+Table~\ref{tab:fault-effects} places each fault against healthy running.
 
-\subsection{AI-Assisted Implementation and Validation Workflow}
-\label{subsec:ai_assisted_workflow}
-
-The extension of the original \texttt{vda5050\_vehicle\_simulator} required the implementation of additional electromechanical, thermal, and battery modelling capabilities based on the physical framework described in the preceding subsections. Since the simulator adaptation itself was not the primary research objective of this work, modern AI-assisted software engineering techniques were employed to accelerate development. 
-
-Specifically, an on-premise local AI model provided by the enterprise, NOVA, was primarily utilized during the design and iterative implementation phases, complemented by Google Gemini 3.8 Flash for architectural specification, code validation, and prompt structuring. The models were provided with detailed requirements regarding the desired physical behaviour, software architecture, VDA 5050 compatibility constraints, and telemetry channels to be incorporated into the simulator. 
-
-The prompts were formulated as rigorous software specification documents detailing the required electromechanical, thermal, and battery equations, architectural constraints within the asynchronous Tokio runtime, Serde serialization structures, runtime fault scenarios triggered via VDA 5050 Instant Actions, and unit test requirements. The specification that the integrated simulator follows, including the points where the code departs from the first equations, is reproduced in Section~\ref{app:simulator_prompt}. 
-
-Crucially, the AI-generated code was not incorporated directly into the project without verification. Instead, all algorithmic proposals were systematically reviewed, manually adapted to fit the simulator codebase, validated against theoretical physics curves, and thoroughly tested before final integration. The consistency of the published channels with these electromechanical relations is checked in Chapter~\ref{chap:testing_evaluation}.
+\begin{table}[H]
+  \centering
+  \footnotesize
+  \caption{Effect of each injected fault relative to healthy running.}
+  \label{tab:fault-effects}
+  \begin{tabularx}{\linewidth}{@{}
+    >{\raggedright\arraybackslash}p{2.15cm}
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}p{1.7cm}
+    @{}}
+    \toprule
+    \textbf{Fault} & \textbf{Motion} & \textbf{Current} & \textbf{Temperature} & \textbf{Vibration} & \textbf{Pack voltage} & \textbf{Duration} \\
+    \midrule
+    Mechanical stall & Shaft and yaw stop & Rises to the 60~A limit & Windings heat fast & Rotation gone; hum about 0.9~mm/s & Sags & While injected \\
+    Wheel wear & Unchanged & Lower & Lower & About 10\% lower at full wear & Unchanged & Stays \\
+    Bearing wear & Wobbles a few percent at 0.3~Hz & Higher & Higher & About double at 0.35~N$\cdot$m & Unchanged & Stays \\
+    Gearbox wear & Unchanged & Higher & Higher & About 30\% higher at 0.85~N$\cdot$m & Unchanged & Stays \\
+    Battery ageing & Unchanged & Unchanged & Pack warms more & Unchanged & Steeper drop & Stays \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \section{MQTT Broker Implementation and Integration} 
 \label{sec:mqtt_broker_implementation}

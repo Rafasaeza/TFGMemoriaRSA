@@ -99,10 +99,10 @@ As a second approach, a search was conducted for publicly available industrial d
 While several sources were identified, none provided the precise combination of electrical, mechanical, and thermal variables necessary for the anomaly detection module.
 
 Given the limitations of both physical deployments and existing public datasets, the decision was made to implement a high-performance simulation framework capable of emulating an entire fleet of AGVs deterministically.
-Since the chosen simulation environment, built upon the open-source repository \texttt{bekirbostanci/vda5050\_vehicle\_simulator} \cite{bostanciVda5050}, did not natively incorporate deep physical powertrain dynamics, it was adapted to model core electromechanical and thermal variables. The chassis is a differential drive: it does not sideslip, and the published yaw rate is a limited state rather than an instantaneous heading step. Section~\ref{sec:physical_modeling} states the motion law and the way it loads the motor.
+Since the chosen simulation environment, built upon the open-source repository \texttt{bekirbostanci/vda5050\_vehicle\_simulator} \cite{bostanciVda5050}, did not natively incorporate deep physical powertrain dynamics, it was adapted to model core electromechanical and thermal variables. The chassis is simulated as a differential drive. Section~\ref{sec:physical_modeling} states the motion law and the way it loads the motor.
 To ensure seamless integration with downstream data consumers, the messages published by the simulated robots strictly adhere to the \textbf{VDA 5050} \cite{vda5050standard} interoperability standard, extended to include custom telemetry payloads.
 
-The simulator can publish telemetry as soon as a vehicle is placed on the map. A training set gathered from isolated moves would still miss the operating context of a plant. Section~\ref{sec:arch_utilities} records how the fleet is driven as a factory, and which tools make that scenario runnable and visible.
+The simulator replaces the physical robots as the source of telemetry. For a context closer to plant operation, the same simulator, which can run several AGVs at once, is also used to reproduce a production process. Section~\ref{sec:arch_utilities} describes that process and the tools that keep it running and visible.
 
 \section{MQTT Broker Layer}
 \label{sec:arch_mqtt}
