@@ -28,17 +28,10 @@ services:
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:v3.8.0
-    entrypoint: /bin/sh
-    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
     environment:
-      CONFIG_FILEPATH: /tmp/config.yml
-      CONSOLE_CONFIG_FILE: |
-        kafka:
-          brokers: ["redpanda:9092"]
-        redpanda:
-          adminApi:
-            enabled: true
-            urls: ["http://redpanda:9644"]
+      CONFIG_FILEPATH: /etc/redpanda-console/config.yml
+    volumes:
+      - ./console.yml:/etc/redpanda-console/config.yml:ro
     ports:
       - 9080:8080
     depends_on:
@@ -53,9 +46,9 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        rpk topic create vda5050-state --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create fleet-vda5050-state --partitions 4 -X brokers=redpanda:9092 --if-not-exists
         rpk topic create fleet-features --partitions 4 -X brokers=redpanda:9092 --if-not-exists
-        rpk topic create ai-anomalies --partitions 4 -X brokers=redpanda:9092 --if-not-exists
+        rpk topic create fleet-anomalies --partitions 4 -X brokers=redpanda:9092 --if-not-exists
     depends_on:
       redpanda:
         condition: service_healthy

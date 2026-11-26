@@ -2,7 +2,7 @@
 \chapter{Deployment Manifests and Simulator Specification}
 \label{app:deployment}
 
-This appendix collects the deployment files and the specification used to extend the vehicle simulator. Chapter~\ref{chap:system_implementation} describes what those files do. The listings are the files of the prototype, copied so the manuscript can be read without the repository open beside it. Credentials in them are the local development defaults.
+This appendix collects the deployment files, the Telegraf bridge configuration, and the specification used to extend the vehicle simulator. Chapter~\ref{chap:system_implementation} describes what those files do. The listings are the files of the prototype, copied so the manuscript can be read without the repository open beside it. Credentials in them are the local development defaults.
 
 \section{Docker Compose}
 \label{sec:app_compose}
@@ -36,6 +36,13 @@ The root file includes one Compose file per subsystem, declares the bridge netwo
 \lstinputlisting[language=yaml,caption={Digital twin},label={lst:twin-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/digital-twin.yml}
 
 \lstinputlisting[language=yaml,caption={Platform portal},label={lst:portal-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/platform-portal.yml}
+
+\section{Telegraf configuration}
+\label{sec:app_telegraf}
+
+The bridge in Section~\ref{subsec:telegraf_integration} is configured by this file. It is mounted into the Telegraf service of Listing~\ref{lst:mqtt-broker-compose}.
+
+\lstinputlisting[language=configToml,caption={Telegraf bridging configuration (telegraf.conf)},label={lst:telegraf-conf},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/config/telegraf.conf}
 
 \section{Specification used to extend the simulator}
 \label{app:simulator_prompt}

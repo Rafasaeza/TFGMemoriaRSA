@@ -195,7 +195,7 @@ UC-01, UC-02, UC-03, and UC-04 share one path. The simulator is shown because it
     \draw[->] (mqtt.south |- 0,-2.3) -- (tg.south |- 0,-2.3)
       node[midway, above, font=\scriptsize] {deliver state};
     \draw[->] (tg.south |- 0,-3.3) -- (rp.south |- 0,-3.3)
-      node[midway, above, font=\scriptsize] {\texttt{vda5050-state}};
+      node[midway, above, font=\scriptsize] {\texttt{fleet-vda5050-state}};
     \draw[->] (rp.south |- 0,-4.3) -- (sp.south |- 0,-4.3)
       node[midway, above, font=\scriptsize] {micro-batch};
     \draw[->] (sp.south |- 0,-5.2) -- ++(0.85,0) -- ++(0,-0.55)
@@ -235,7 +235,7 @@ UC-05, UC-06, UC-07, and UC-08 continue from the feature topic. The inference jo
     \draw[->] (inf.south |- 0,-4.1) -- ++(0.9,0) -- ++(0,-0.7)
       node[midway, right, font=\scriptsize, align=left] {window, scale,\\classify} -- ++(-0.9,0);
     \draw[->] (inf.south |- 0,-5.6) -- (rp.south |- 0,-5.6)
-      node[midway, above, font=\scriptsize] {\texttt{ai-anomalies}};
+      node[midway, above, font=\scriptsize] {\texttt{fleet-anomalies}};
     \draw[->] (rp.south |- 0,-6.6) -- (qdb.south |- 0,-6.6)
       node[midway, above, font=\scriptsize] {Kafka Connect};
     \draw[->] (gf.south |- 0,-7.6) -- (qdb.south |- 0,-7.6)

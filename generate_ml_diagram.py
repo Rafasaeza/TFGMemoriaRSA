@@ -141,7 +141,7 @@ def create_ml_architecture_diagram():
         (2.85, "Per-vehicle windows", "contract validation\nand gap rule", False),
         (5.25, "Promoted scaler", "training mean\nand variance", True),
         (7.65, "GRU reconstruction", "score and channel\ncontribution", True),
-        (10.05, "ai-anomalies", "normal / suspicious\n/ anomalous", False),
+        (10.05, "fleet-anomalies", "normal / suspicious\n/ anomalous", False),
     ]
     for x, title, body, highlight in infer:
         face = "#F6FFED" if highlight else "#FFFFFF"

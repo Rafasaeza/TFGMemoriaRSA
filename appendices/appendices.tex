@@ -81,7 +81,7 @@ QuestDB console & \texttt{localhost:9000} & SQL over the time-series tables. \\
 \addlinespace
 MinIO console & \texttt{localhost:9001} & Buckets. Login \texttt{admin} / \texttt{admin123456}. \\
 \addlinespace
-Redpanda Console & \texttt{localhost:9080} & Topics \texttt{vda5050-state}, \texttt{fleet-features}, \texttt{ai-anomalies}. \\
+Redpanda Console & \texttt{localhost:9080} & Topics \texttt{fleet-vda5050-state}, \texttt{fleet-features}, \texttt{fleet-anomalies}. \\
 \midrule
 Mosquitto & \texttt{localhost:1883} & MQTT. WebSocket for the twin on \texttt{9883}. \\
 \addlinespace
@@ -186,7 +186,7 @@ The anomaly dashboard stays empty until inference is scoring. Scoring starts whe
 
 \section{Inspecting the live data}
 
-Redpanda Console at \texttt{http://localhost:9080} shows the three topics. \texttt{vda5050-state} is the raw vehicle state. \texttt{fleet-features} is the curated stream. \texttt{ai-anomalies} is the score stream. Open a topic and read the latest records. The key of a record is the vehicle.
+Redpanda Console at \texttt{http://localhost:9080} shows the three topics. \texttt{fleet-vda5050-state} is the raw vehicle state. \texttt{fleet-features} is the curated stream. \texttt{fleet-anomalies} is the score stream. Open a topic and read the latest records. The key of a record is the vehicle.
 
 \begin{figure}[ht]
   \centering
@@ -200,12 +200,12 @@ QuestDB at \texttt{http://localhost:9000} answers SQL against the same operation
 \begin{lstlisting}[basicstyle=\ttfamily\small,breaklines=true]
 SELECT timestamp, agv_id, vx, omega, motor_current, battery_voltage
 FROM fleet_features
-WHERE agv_id = 't11'
+WHERE agv_id = 'rikeb:t11'
 ORDER BY timestamp DESC
 LIMIT 20;
 \end{lstlisting}
 
-The anomaly table is \texttt{ai\_anomalies}. The columns to read first are \texttt{anomaly\_score}, \texttt{classification} (\texttt{NORMAL}, \texttt{SUSPICIOUS}, \texttt{ANOMALY}), and the top-feature fields.
+The anomaly table is \texttt{fleet\_anomalies}. The columns to read first are \texttt{anomaly\_score}, \texttt{classification} (\texttt{NORMAL}, \texttt{SUSPICIOUS}, \texttt{ANOMALY}), and the top-feature fields.
 
 \begin{figure}[ht]
   \centering

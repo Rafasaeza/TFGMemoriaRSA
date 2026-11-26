@@ -219,40 +219,11 @@ The service definition, including Telegraf, is Listing~\ref{lst:mqtt-broker-comp
 \label{sec:event_stream_implementation}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_event_streaming}.}
 
-The event streaming layer was implemented using Redpanda, a Kafka-compatible
-event streaming platform that acts as the central event bus connecting the
-telemetry processing components. Three services are defined in the Docker
-Compose configuration: the Redpanda broker, Redpanda Console for stream
-monitoring and visualization, and a one-shot initialization service for
-creating the required topics.
+As set out in Section~\ref{sec:arch_event_streaming}, Redpanda is the event log of the platform. This section describes that deployment: one broker, Redpanda Console, and a one-shot initialisation that creates the topics. The three services are Listing~\ref{lst:redpanda-docker-compose}.
 
-The Redpanda broker is configured to expose two Kafka-compatible endpoints.
-The internal endpoint (\texttt{redpanda:9092}) enables communication between
-services within the Docker network, while the external endpoint
-(\texttt{localhost:19092}) allows access from the host machine. The
-administrative API is exposed on port \texttt{9644}, and persistent storage
-is configured through a Docker volume to preserve broker data across
-container restarts.
+The broker listens for the Kafka protocol on two addresses. Containers on \texttt{redpanda-net} use \texttt{redpanda:9092}. A tool on the host uses \texttt{localhost:19092}, which is the same API published on the machine. The administrative API listens on port 9644 inside the network, which is where Console and the health check reach it, and that port is published on the host as 19644. The data directory is the volume \texttt{redpanda-data}, so the log survives a restart of the container.
 
-To improve startup reliability, a health check is configured using
-\texttt{rpk cluster health}. The Redpanda Console service waits until the
-broker is healthy before starting, while the initialization service uses
-the same dependency condition to ensure that topic creation is attempted
-only after the broker is operational. The initialization service creates
-the \texttt{vda5050-state}, \texttt{vda5050-state-deduplicated}, \texttt{fleet-features}, and \texttt{ai-anomalies} topics with four partitions and exits after
-completing the operation. The \texttt{--if-not-exists} option prevents
-errors when the topic has already been created.
-
-A four-partition configuration was selected to provide parallelism for
-the expected telemetry workload. Depending on message size, hardware
-resources, replication settings, and processing overhead, a partition
-may support throughput in the order of thousands or tens of thousands
-of messages per second. Therefore, four partitions provide a reasonable
-initial configuration for the simulated fleet, although the effective
-capacity must be validated through performance testing. The broker runs
-in \texttt{dev-container} mode with one CPU core assigned through
-\texttt{--smp 1}, reflecting the resource constraints of the local
-development environment. The service file is Listing~\ref{lst:redpanda-docker-compose}.
+A health check runs \texttt{rpk cluster health}. Console and the initialisation container both wait until that check passes. The initialisation container then creates \texttt{fleet-vda5050-state}, \texttt{fleet-features} and \texttt{fleet-anomalies}, each with four partitions, and exits. The option \texttt{--if-not-exists} lets the same command run again when the topics are already there. Four partitions are enough for the vehicles of this fleet to be read in parallel. The broker is started in \texttt{dev-container} mode with \texttt{--smp 1}, so the process uses one core on the development machine.
 
 
 \section{Streaming Integration and Inter-Service Connectivity}
@@ -269,51 +240,9 @@ This subsection is the implementation of the bridge decided in Section~\ref{subs
 
 Only the state topic is carried across. The subscription \texttt{uagv/v2/+/+/state} matches every manufacturer and every serial number, whereas orders, instant actions, and the \texttt{connection} and \texttt{visualization} topics remain on MQTT for the orchestrator and the vehicles. The payload is kept as a single string, which means the bridge stores the JSON without parsing it, and the renaming and the checks are left to the Spark Bronze job.
 
-From that topic the bridge reads the manufacturer and the serial number, and it builds the key \texttt{source\_asset\_key} in the form \texttt{<manufacturer>:<serial\_number>}. On the fleet specified for the Node-RED factory use case (Section~\ref{subsec:factory-orchestrator-implementation}), the vehicles run from \texttt{rikeb:t11} to \texttt{rikeb:t15}. That key becomes the Kafka record key, so the states of one vehicle hash to one partition and keep their order, while two manufacturers that reuse a serial number do not collide. The body written to \texttt{vda5050-state} is still the original string. Five headers travel with it, naming the serial, the manufacturer, the key, the message type and the original MQTT topic, and the record is compressed with Zstandard. Whatever has arrived since the previous write is sent on once a second, and if Redpanda is not yet accepting connections when the process starts, the output retries instead of exiting. The configuration is Listing~\ref{lst:telegraf-conf}.
+From that topic the bridge reads the manufacturer and the serial number, and it builds the key \texttt{source\_asset\_key} in the form \texttt{<manufacturer>:<serial\_number>}. On the fleet specified for the Node-RED factory use case (Section~\ref{subsec:factory-orchestrator-implementation}), the vehicles run from \texttt{rikeb:t11} to \texttt{rikeb:t15}. That key becomes the Kafka record key, so the states of one vehicle hash to one partition and keep their order, while two manufacturers that reuse a serial number do not collide. The body written to \texttt{fleet-vda5050-state} is still the original string. Five headers travel with it, naming the serial, the manufacturer, the key, the message type and the original MQTT topic, and the record is compressed with Zstandard. Whatever has arrived since the previous write is sent on once a second, and if Redpanda is not yet accepting connections when the process starts, the output retries instead of exiting. The configuration is Listing~\ref{lst:telegraf-conf} in Appendix~\ref{sec:app_telegraf}.
 
 The subscription uses Quality of Service 1 and a persistent session under the fixed client identifier \texttt{telegraf-vda5050}, and a message is confirmed to Mosquitto only once Redpanda has accepted the record. While Telegraf is away and Mosquitto is still up, the broker therefore keeps those messages and returns them when the same client comes back, and the queue also survives a restart of Mosquitto because persistence is enabled. If instead Redpanda stops accepting writes, the unconfirmed states sit in that same queue. The broker default holds about 1000 messages, which this configuration leaves unchanged, so five vehicles fill it in about three minutes. A state the simulator never published, because Mosquitto itself was down, is not recovered afterwards. Idempotent writes on the producer then keep a retry from storing a second copy of a record that Redpanda had already accepted.
-
-\begin{lstlisting}[language=configToml, caption={Telegraf bridging configuration (telegraf.conf)}, label={lst:telegraf-conf}, basicstyle=\ttfamily\small, breaklines=true]
-[agent]
-  flush_interval = "1s"
-  omit_hostname = true
-
-[[inputs.mqtt_consumer]]
-  servers = ["${MQTT_BROKER_URL}"]
-  topics = ["uagv/v2/+/+/state"]
-  client_id = "telegraf-vda5050"
-  qos = 1
-  persistent_session = true
-  data_format = "value"
-  data_type = "string"
-
-  [[inputs.mqtt_consumer.topic_parsing]]
-    topic = "uagv/v2/+/+/state"
-    tags = "_/_/source_manufacturer/source_serial_number/message_type"
-
-[[processors.template]]
-  order = 0
-  tag = "source_asset_key"
-  template = '{{ .Tag "source_manufacturer" }}:{{ .Tag "source_serial_number" }}'
-
-[[outputs.kafka]]
-  brokers = ["${KAFKA_BROKER}"]
-  topic = "vda5050-state"
-  routing_tag = "source_asset_key"
-  idempotent_writes = true
-  compression_codec = 4
-  max_retry = 5
-  startup_error_behavior = "retry"
-  data_format = "template"
-  template = '{{ .Field "value" }}'
-
-  [outputs.kafka.headers]
-    source_serial_number = '{{ index .Tags "source_serial_number" }}'
-    source_manufacturer = '{{ index .Tags "source_manufacturer" }}'
-    source_asset_key = '{{ index .Tags "source_asset_key" }}'
-    message_type = '{{ index .Tags "message_type" }}'
-    mqtt_topic = '{{ index .Tags "topic" }}'
-\end{lstlisting}
 
 \subsection{Kafka Connect Sinks into QuestDB}
 \label{subsec:questdb-kafka-connect}
@@ -323,9 +252,9 @@ The service \texttt{questdb-kafka-connect} runs the QuestDB sink connector. It j
 
 Two connector definitions are registered by \texttt{questdb-kafka-connect-init}, which submits each file under \texttt{connectors/} and polls until the task reports \texttt{RUNNING}. Both use a JSON value converter with schemas disabled, ignore the Kafka key, and name the designated timestamp field \texttt{timestamp}.
 
-The \texttt{fleet-features} connector appends to the table \texttt{fleet\_features}. Symbol columns are \texttt{manufacturer}, \texttt{agv\_id}, and \texttt{map\_id}. The kinematic, battery, and motor measurements are declared as doubles, so the column type does not depend on the first record. This replaces the earlier sink on \texttt{vda5050-state}. That topic carried the nested state message, and the connector had to flatten it. The Silver job now publishes a row that already matches the table, and this connector adds no transform.
+The \texttt{fleet-features} connector appends to the table \texttt{fleet\_features}. Symbol columns are \texttt{manufacturer}, \texttt{agv\_id}, and \texttt{map\_id}. The kinematic, battery, and motor measurements are declared as doubles, so the column type does not depend on the first record. This replaces the earlier sink on \texttt{fleet-vda5050-state}. That topic carried the nested state message, and the connector had to flatten it. The Silver job now publishes a row that already matches the table, and this connector adds no transform.
 
-The \texttt{ai-anomalies} connector appends to \texttt{ai\_anomalies}. Symbols are the vehicle, the model name and version, the class, and the three leading channel names. Doubles are the score, the two thresholds, and the three channel shares. The event also contains a nested \texttt{top\_features} array. A \texttt{ReplaceField} transform excludes that array, because the sink stores scalars and the same channels are already present as the three symbol and double pairs and as \texttt{top\_features\_summary}.
+The \texttt{fleet-anomalies} connector appends to \texttt{fleet\_anomalies}. Symbols are the vehicle, the model name and version, the class, and the three leading channel names. Doubles are the score, the two thresholds, and the three channel shares. The event also contains a nested \texttt{top\_features} array. A \texttt{ReplaceField} transform excludes that array, because the sink stores scalars and the same channels are already present as the three symbol and double pairs and as \texttt{top\_features\_summary}.
 
 \section{Stream Processing Layer: Apache Spark Implementation}
 \label{sec:spark-implementation}
@@ -342,7 +271,7 @@ Listing~\ref{lst:spark-docker-compose} is the Compose definition of the streamin
 The container initialization is governed by health-check and completion dependencies:
 \begin{itemize}
     \item It waits for the \texttt{redpanda} broker to report a healthy cluster status.
-    \item It awaits the successful execution of \texttt{redpanda-init} to ensure that all required topics (including \texttt{vda5050-state} and \texttt{vda5050-state-deduplicated}) have been provisioned before job submission.
+    \item It awaits the successful execution of \texttt{redpanda-init}, which creates \texttt{fleet-vda5050-state}, \texttt{fleet-features} and \texttt{fleet-anomalies}, before the jobs are submitted.
     \item It requires \texttt{minio} to be started and the \texttt{createbuckets} utility container to successfully complete bucket initialization (\texttt{lakehouse}).
     \item It waits until the Iceberg REST catalog (\texttt{iceberg-rest}) is healthy and \texttt{iceberg-catalog-migrate} has finished, so tables created under the earlier catalog are visible before the first commit.
 \end{itemize}
@@ -368,10 +297,10 @@ Three streaming data-path jobs compose the Medallion pipeline:
   \begin{itemize} 
     \item \texttt{vda5050\_state\_writer}: Persists raw VDA5050 telemetry from Kafka into the Bronze layer. 
     \item \texttt{fleet\_features\_writer}: Extracts, transforms and enriches telemetry into a machine-learning-ready feature representation. 
-    \item \texttt{anomaly\_detector}: Scores the live feature stream and publishes each window to \texttt{ai-anomalies}.
+    \item \texttt{anomaly\_detector}: Scores the live feature stream and publishes each window to \texttt{fleet-anomalies}.
   \end{itemize} In addition, an auxiliary operational job (\texttt{spark-maintenance}) executes asynchronously outside the streaming data flow to perform automated compaction and metadata maintenance on the Iceberg tables.
 
-  The three streaming jobs do not share one output pattern. The Bronze job only appends the raw payload to Iceberg. The Silver job appends the curated features to Iceberg and publishes the same records to Redpanda. The inference job does the same with its scores: it appends them to \texttt{lakehouse.gold.ai\_anomalies} and publishes them to \texttt{ai-anomalies}. QuestDB keeps a seven-day copy of that topic for the dashboards. The Gold table is the copy that remains, so a later query can count how many windows were normal, suspicious, or anomalous in one year and in the next.
+  The three streaming jobs do not share one output pattern. The Bronze job only appends the raw payload to Iceberg. The Silver job appends the curated features to Iceberg and publishes the same records to Redpanda. The inference job does the same with its scores: it appends them to \texttt{lakehouse.gold.fleet\_anomalies} and publishes them to \texttt{fleet-anomalies}. QuestDB keeps a seven-day copy of that topic for the dashboards. The Gold table is the copy that remains, so a later query can count how many windows were normal, suspicious, or anomalous in one year and in the next.
 
   \paragraph{Dual sink of the Silver job} The feature engineering job writes its batch to two destinations:
     \begin{itemize}
@@ -384,7 +313,7 @@ The Bronze ingestion job (\texttt{vda5050\_state\_writer.py}) constitutes the en
 Its responsibility is to persist the incoming telemetry stream without modification, creating an immutable historical record of the original VDA5050 messages.
 Unlike subsequent processing stages, no feature extraction, filtering, aggregation or deduplication is applied during Bronze ingestion. 
 The objective of this layer is to preserve the raw telemetry exactly as it was received from the messaging infrastructure, ensuring full data lineage, reproducibility and auditability. 
-\paragraph{Ingestion and Storage Configuration} The job is implemented using PySpark Structured Streaming and continuously consumes records from the Kafka topic \texttt{vda5050-state}. 
+\paragraph{Ingestion and Storage Configuration} The job is implemented using PySpark Structured Streaming and continuously consumes records from the Kafka topic \texttt{fleet-vda5050-state}. 
 Incoming messages are processed in micro-batches and persisted into an Apache Iceberg table stored in the MinIO object store.
 Spark is configured to access MinIO through the S3A filesystem connector, using path-style access to the endpoint:\texttt{http://minio:9000}.
 
@@ -394,9 +323,9 @@ The job executes micro-batches at a configurable interval, defined by the enviro
 \subsection{Silver Feature Engineering Job}
 \label{subsec:silver-feature-engineering-job}
 
-The Silver job is \texttt{fleet\_features\_writer.py}, submitted by the service \texttt{spark-fleet-features}. It reads \texttt{vda5050-state}. On each micro-batch, \texttt{extract\_fleet\_features} parses the JSON payload, keeps the event time of the message, and flattens position, velocity, and battery into columns. Motor current, voltage, temperature, speed, torque, power, and back electromotive force are read from the \texttt{information} array, from the entry whose type is \texttt{motor\_telemetry}. A message without a serial number is dropped. The fault flag is the telemetry flag when it is present, and otherwise the presence of a VDA~5050 error.
+The Silver job is \texttt{fleet\_features\_writer.py}, submitted by the service \texttt{spark-fleet-features}. It reads \texttt{fleet-vda5050-state}. On each micro-batch, \texttt{extract\_fleet\_features} parses the JSON payload, keeps the event time of the message, and flattens position, velocity, and battery into columns. Motor current, voltage, temperature, speed, torque, power, and back electromotive force are read from the \texttt{information} array, from the entry whose type is \texttt{motor\_telemetry}. A message without a serial number is dropped. The fault flag is the telemetry flag when it is present, and otherwise the presence of a VDA~5050 error.
 
-The batch is appended to \texttt{lakehouse.silver.fleet\_features} and published to \texttt{fleet-features}. Both writes go through the shared sink helpers. The Kafka key stays the manufacturer and the serial number. Rows are sorted by vehicle and time before the Iceberg append. The table is created on startup if it is missing, partitioned by day, from the schema generated out of \texttt{schema/fleet\_features.yml}.
+The batch is appended to \texttt{lakehouse.silver.fleet\_features} and published to \texttt{fleet-features}. Both writes go through the shared sink helpers. The column \texttt{agv\_id} and the Kafka key are the same string, \texttt{manufacturer:serialNumber}, because a serial number alone would join two manufacturers in QuestDB and in a training window. Rows are sorted by that identity and by time before the Iceberg append. The table is created on startup if it is missing, partitioned by day, from the schema generated out of \texttt{schema/fleet\_features.yml}.
 
 The trigger interval is \texttt{PROCESSING\_INTERVAL\_SILVER}, three seconds by default, against fifteen seconds for Bronze. The shorter interval is there because the inference job scores this publication as it arrives. The checkpoint is stored under the lakehouse checkpoint prefix, in \texttt{fleet\_features\_writer}.
 
@@ -405,7 +334,7 @@ The trigger interval is \texttt{PROCESSING\_INTERVAL\_SILVER}, three seconds by 
 
 The third streaming stage is \texttt{anomaly\_detector.py}, submitted by \texttt{spark-anomaly-detector}. It consumes \texttt{fleet-features}. It does not read the Silver table it has just been written beside. The windowing, the production model, the scaler, and the classes \texttt{NORMAL}, \texttt{SUSPICIOUS}, and \texttt{ANOMALY} are those of Section~\ref{subsec:ml-inference-implementation}.
 
-Each scored window is appended to \texttt{lakehouse.gold.ai\_anomalies} and written to \texttt{ai-anomalies}, with \texttt{agv\_id} as the key. The event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. The Iceberg row keeps those scalar fields and is partitioned by day. QuestDB ingests the topic through the connector of Section~\ref{subsec:questdb-kafka-connect} and drops it after seven days. A count by year is a query on the Gold table, which still holds the rows after maintenance has compacted the small files. Maintenance expires old snapshots and keeps the last two, so the comparison uses the current table rather than an old snapshot. If the Iceberg append fails, the job logs the error and still publishes to Kafka, so the dashboard is not blocked by the archive. The checkpoint is local to the container and is removed on start, so a restart follows the live tail of \texttt{fleet-features}. An interval that was missed remains in the Silver table and can be read again by a training-style scan.
+Each scored window is appended to \texttt{lakehouse.gold.fleet\_anomalies} and written to \texttt{fleet-anomalies}. The Kafka key and the field \texttt{agv\_id} are both \texttt{manufacturer:serialNumber}, so the QuestDB symbol is the same vehicle as the partition. The event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. The Iceberg row keeps those scalar fields and is partitioned by day. QuestDB ingests the topic through the connector of Section~\ref{subsec:questdb-kafka-connect} and drops it after seven days. A count by year is a query on the Gold table, which still holds the rows after maintenance has compacted the small files. Maintenance expires old snapshots and keeps the last two, so the comparison uses the current table rather than an old snapshot. If the Iceberg append fails, the job logs the error and still publishes to Kafka, so the dashboard is not blocked by the archive. The checkpoint is local to the container and is removed on start, so a restart follows the live tail of \texttt{fleet-features}. An interval that was missed remains in the Silver table and can be read again by a training-style scan.
 
 \subsection{Lakehouse Maintenance Job}
 \label{subsec:lakehouse-maintenance-job}
@@ -437,7 +366,7 @@ The job accepts a configurable target via \texttt{MAINTENANCE\_TARGET} (\texttt{
 
 The lakehouse is the MinIO bucket \texttt{lakehouse}. The warehouse path is \texttt{s3a://lakehouse/iceberg}, and the streaming checkpoints sit beside it under \texttt{s3a://lakehouse/checkpoints}. Table files stay in that bucket. The pointers to the current metadata are held by the REST catalog of Section~\ref{subsec:spark-docker-definition}, which the Spark jobs, maintenance and training share.
 
-Three tables are created by the jobs. \texttt{lakehouse.bronze.vda5050\_state} keeps every raw state message. \texttt{lakehouse.silver.fleet\_features} keeps the curated row, and it is the table the trainer reads. \texttt{lakehouse.gold.ai\_anomalies} keeps every scored window, with the model version and the class, so the history of detections outlives the seven-day retention of QuestDB. The maintenance job of Section~\ref{subsec:lakehouse-maintenance-job} compacts all three.
+Three tables are created by the jobs. \texttt{lakehouse.bronze.fleet\_vda5050\_state} keeps every raw state message. \texttt{lakehouse.silver.fleet\_features} keeps the curated row, and it is the table the trainer reads. \texttt{lakehouse.gold.fleet\_anomalies} keeps every scored window, with the model version and the class, so the history of detections outlives the seven-day retention of QuestDB. The maintenance job of Section~\ref{subsec:lakehouse-maintenance-job} compacts all three.
 
 \subsection{S3-Compatible Object Storage: MinIO}
 \label{subsec:minio-s3-implementation}
@@ -466,7 +395,7 @@ The three tables are partitioned by day on \texttt{timestamp}. Inside a partitio
 
 As established in the architectural design (Chapter~\ref{chap:system_architecture}), the platform adopts a bifurcated persistence strategy that strictly separates the analytical lakehouse storage (MinIO and Apache Iceberg) from the operational time-series database. While the lakehouse is optimized for heavy, multi-tier batch analytics and offline model training, real-time observability requires a database capable of sub-second streaming ingestion and high-frequency SQL aggregations across sliding time windows. To fulfill this operational role, \textbf{QuestDB} (version 9.4.3) was selected and integrated into the containerized platform.
 
-The QuestDB subsystem interfaces directly with the central event streaming layer through a dedicated, containerized \textbf{Apache Kafka Connect} cluster. The connectors append the Silver publication \texttt{fleet-features} and the inference publication \texttt{ai-anomalies}. The raw \texttt{vda5050-state} topic is no longer sunk here. It remains the input of the Bronze and Silver Spark jobs, and its history stays in the lakehouse.
+The QuestDB subsystem interfaces directly with the central event streaming layer through a dedicated, containerized \textbf{Apache Kafka Connect} cluster. The connectors append the Silver publication \texttt{fleet-features} and the inference publication \texttt{fleet-anomalies}. The raw \texttt{fleet-vda5050-state} topic is no longer sunk here. It remains the input of the Bronze and Silver Spark jobs, and its history stays in the lakehouse.
 
 \subsection{Database Deployment and Schema Architecture}
 \label{subsec:questdb-deployment-schema}
@@ -484,7 +413,7 @@ A container health check continuously probes the HTTP status endpoint (\texttt{h
 
 To automate database table provisioning upon initial startup, a one-shot container (\texttt{questdb-init}) is defined using \texttt{curlimages/curl}. It executes after QuestDB reports a healthy state and submits every file in \texttt{schema/} to the \texttt{/exec} endpoint, one statement at a time.
 
-Two tables are created, both designated on \texttt{timestamp}, partitioned by day, written with a write-ahead log, and retained for seven days. \texttt{fleet\_features} stores the Silver row: the vehicle identifiers as symbols, the position and the kinematic and electrical channels as doubles, and the driving, charging, and fault flags as booleans. \texttt{ai\_anomalies} stores one scored window: the vehicle, the model name and version, the score, the warning and anomaly thresholds, the class, the window bounds, a short summary of the contributing channels, and the three leading channels with their share of the error. The column lists are the same ones declared by the connectors, so an append does not have to alter the table.
+Two tables are created, both designated on \texttt{timestamp}, partitioned by day, written with a write-ahead log, and retained for seven days. \texttt{fleet\_features} stores the Silver row: the vehicle identifiers as symbols, the position and the kinematic and electrical channels as doubles, and the driving, charging, and fault flags as booleans. \texttt{fleet\_anomalies} stores one scored window: the vehicle, the model name and version, the score, the warning and anomaly thresholds, the class, the window bounds, a short summary of the contributing channels, and the three leading channels with their share of the error. The column lists are the same ones declared by the connectors, so an append does not have to alter the table.
 
 \subsection{Automated Lifecycle and Dependency Management}
 \label{subsec:questdb-lifecycle}
@@ -492,7 +421,7 @@ Two tables are created, both designated on \texttt{timestamp}, partitioned by da
 To guarantee reliable system initialization, service orchestration is strictly ordered through Docker health checks and one-shot provisioning containers:
 \begin{enumerate}
     \item The \texttt{questdb} service initializes its engine and validates readiness on port 9003.
-    \item The \texttt{questdb-init} service creates \texttt{fleet\_features} and \texttt{ai\_anomalies}.
+    \item The \texttt{questdb-init} service creates \texttt{fleet\_features} and \texttt{fleet\_anomalies}.
     \item The \texttt{questdb-kafka-connect} service initializes only after the Redpanda broker is healthy, all required Kafka topics are created (\texttt{redpanda-init}), and QuestDB tables exist (\texttt{questdb-init}).
     \item Finally, a dedicated initialization container (\texttt{questdb-kafka-connect-init}) executes an automated shell script that submits the connector configuration via the Kafka Connect REST API (\texttt{PUT /connectors/<name>/config}). The script actively polls the connector status endpoint until the task achieves the \texttt{RUNNING} state, ensuring that the pipeline is completely operational before simulated AGVs begin streaming messages.
 \end{enumerate}
@@ -508,16 +437,16 @@ This section describes how the machine learning layer is built. The design reaso
 \subsection{The shared contract}
 \label{subsec:ml-common-implementation}
 
-The preprocessing rules live in the Python package \texttt{ml-common}. The training image and the inference image both mount that tree read-only and add it to \texttt{PYTHONPATH}, so the two processes import the same modules. The package reads \texttt{schema/ml\_model\_contract.yml}, which fixes the eight channels and their order (linear and angular velocity, battery voltage, current and temperature, motor current, temperature and power), a window of 60 samples with step 1, a maximum gap of 5 seconds, the registered model name \texttt{agv-gru-autoencoder}, the warning and anomaly multipliers, and the topic names \texttt{fleet-features} and \texttt{ai-anomalies}.
+The preprocessing rules live in the Python package \texttt{ml-common}. The training image and the inference image both mount that tree read-only and add it to \texttt{PYTHONPATH}, so the two processes import the same modules. The package reads \texttt{schema/ml\_model\_contract.yml}, which fixes the eight channels and their order (linear and angular velocity, battery voltage, current and temperature, motor current, temperature and power), a window of 60 samples with step 1, a maximum gap of 5 seconds, the registered model name \texttt{agv-gru-autoencoder}, the warning and anomaly multipliers, and the topic names \texttt{fleet-features} and \texttt{fleet-anomalies}.
 
-Training calls \texttt{build\_windows} and \texttt{split\_windows}. Inference calls \texttt{validate\_and\_filter\_records} and \texttt{StreamingWindowBuffer}. The buffer keeps an independent tail of samples for each \texttt{agv\_id} across micro-batches. It emits a window only when the tail has the full length and no gap above the contract, and it discards samples already emitted so the tail stays bounded. A window never mixes two vehicles.
+Training calls \texttt{build\_windows} and \texttt{split\_windows}. Inference calls \texttt{validate\_and\_filter\_records} and \texttt{StreamingWindowBuffer}. The buffer keeps an independent tail of samples for each vehicle across micro-batches, and that vehicle is \texttt{manufacturer:serialNumber}. It emits a window only when the tail has the full length and no gap above the contract, and it discards samples already emitted so the tail stays bounded. A window never mixes two vehicles, including two manufacturers that reuse a serial.
 
 \subsection{Offline training and the MLflow record}
 \label{subsec:ml-training-implementation}
 
 Training is the \texttt{ml-train} service, built from \texttt{docker/ml-module}. It belongs to the Compose profile \texttt{ml}, so a normal stack start does not launch it. A run is started explicitly, after MinIO and the MLflow server are healthy, and the container joins \texttt{lakehouse-net} to read the warehouse and \texttt{ml-net} to reach the tracking server. Endpoints, the date range, and the training hyperparameters come from the root environment file. The service reads them through a typed configuration object rather than from constants in the source.
 
-The entry point \texttt{training/train.py} executes one pipeline. \texttt{IcebergDatasetReader} loads \texttt{lakehouse.silver.\allowbreak fleet\_features} for the requested interval through PyIceberg and the same REST catalog (\texttt{ICEBERG\_CATALOG\_TYPE=rest}). PyIceberg does not implement a Hadoop catalog, which is one reason the platform moved off that first design. The scan returns a table ordered by vehicle and by time.
+The entry point \texttt{training/train.py} executes one pipeline. \texttt{IcebergDatasetReader} loads \texttt{lakehouse.silver.\allowbreak fleet\_features} for the requested interval through PyIceberg and the same REST catalog (\texttt{ICEBERG\_CATALOG\_TYPE=rest}). PyIceberg does not implement a Hadoop catalog, which is one reason the platform moved off that first design. The scan returns a table ordered by vehicle and by time. Before the windows are cut, a stored \texttt{agv\_id} that is still only the serial is prefixed with its manufacturer, so an older row and a new row of the same vehicle fall in one series.
 
 \texttt{build\_windows} cuts one window per step inside each vehicle. \texttt{split\_windows} assigns the earliest 80\,\% of each vehicle's windows to training and the later tail to validation. \texttt{FeatureScaler} fits a \texttt{StandardScaler} on the training windows only, writes \texttt{artifacts/scaler.pkl}, and transforms the validation windows with those frozen statistics.
 
@@ -538,7 +467,7 @@ Scoring is the service \texttt{spark-anomaly-detector}. It submits \texttt{anoma
 
 The query subscribes to \texttt{fleet-features} with a one-second trigger and begins at the latest offset. Each micro-batch is processed in \texttt{foreachBatch}. Records that fail the contract are counted and dropped. The surviving records update the per-vehicle buffer. Completed windows are scaled with the \texttt{StandardScaler} downloaded from the MLflow run of the resolved model, then reconstructed by that model in evaluation mode. The score of a window is its mean squared error. It is labeled \texttt{NORMAL}, \texttt{SUSPICIOUS}, or \texttt{ANOMALY} against the two levels carried by the training metadata of that version, by default the validation mean plus two and plus four standard deviations. Windows above the warning level also carry the channels with the largest share of the error.
 
-The batch is appended to \texttt{lakehouse.gold.ai\_anomalies} and written to the topic \texttt{ai-anomalies}, with \texttt{agv\_id} as the Kafka key. Each event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. QuestDB ingests the topic through the Kafka Connect path used for the operational store and retains it for seven days. The Gold table is the longer record.
+The batch is appended to \texttt{lakehouse.gold.fleet\_anomalies} and written to the topic \texttt{fleet-anomalies}. The Kafka key and the field \texttt{agv\_id} are both \texttt{manufacturer:serialNumber}. Each event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. QuestDB ingests the topic through the Kafka Connect path used for the operational store and retains it for seven days. The Gold table is the longer record.
 
 The model is loaded at startup from the registry. The job resolves the version that carries the \texttt{production} alias and downloads the scaler logged in that same run; the network itself is the PyTorch flavor registered for the version. On a poll, by default once a minute, it repeats the lookup and reloads the model and the scaler together when the alias points at a new version. The streaming checkpoint is cleared on start, so a restart follows the live tail of \texttt{fleet-features} instead of replaying the backlog. The Silver table remains the place from which a missed interval can be scored again by a training-style read.
 
@@ -550,7 +479,7 @@ The service \texttt{grafana} is a Grafana 13.1 image with the QuestDB data-sourc
 
 The data source is provisioned from a file, and it is not editable in the interface. It uses the QuestDB plugin against the PostgreSQL wire of the database, host \texttt{questdb} and port 8812, with the read-only account \texttt{grafana}. TLS on that connection is disabled, which is the same clear-text deployment recorded as future work in Section~\ref{subsec:future_tls}.
 
-Dashboards are provisioned from JSON files under \texttt{dashboards/questdb}. The file provider rebuilds the folder from that directory, so a board shipped with the repository appears without an import. Each board refreshes every five seconds and offers a vehicle variable. The five boards are Fleet Battery, Fleet Velocity, Fleet Powertrain Physics, Fleet Features - Canonical Silver Overview, and AGV Anomaly Detection \& ML Inference. The first four query \texttt{fleet\_features}. The inference board queries \texttt{ai\_anomalies}: counts by class, the score against the two thresholds, and the channels that dominate the error. Adding a panel is a change to those files. The service does not subscribe to Redpanda and does not write to QuestDB.
+Dashboards are provisioned from JSON files under \texttt{dashboards/questdb}. The file provider rebuilds the folder from that directory, so a board shipped with the repository appears without an import. Each board refreshes every five seconds and offers a vehicle variable. The five boards are Fleet Battery, Fleet Velocity, Fleet Powertrain Physics, Fleet Features - Canonical Silver Overview, and AGV Anomaly Detection \& ML Inference. The first four query \texttt{fleet\_features}. The inference board queries \texttt{fleet\_anomalies}: counts by class, the score against the two thresholds, and the channels that dominate the error. Adding a panel is a change to those files. The service does not subscribe to Redpanda and does not write to QuestDB.
 
 \section{Supporting Utilities Implementation}
 \label{sec:utilities_implementation}

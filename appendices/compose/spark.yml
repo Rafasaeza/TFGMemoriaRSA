@@ -19,14 +19,14 @@ services:
     environment:
       - PYTHONPATH=/opt/spark/src
       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
-      - KAFKA_TOPIC_VDA5050_STATE=${KAFKA_TOPIC_VDA5050_STATE:-vda5050-state}
+      - KAFKA_TOPIC_VDA5050_STATE=${KAFKA_TOPIC_VDA5050_STATE:-fleet-vda5050-state}
       - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
       - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
       - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
       - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
       - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
-      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
+      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.fleet_vda5050_state}
       - PROCESSING_INTERVAL_BRONZE=${PROCESSING_INTERVAL_BRONZE:-15 seconds}
     command: >
       /opt/spark/bin/spark-submit
@@ -55,7 +55,7 @@ services:
     environment:
       - PYTHONPATH=/opt/spark/src
       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
-      - KAFKA_TOPIC_VDA5050_STATE=${KAFKA_TOPIC_VDA5050_STATE:-vda5050-state}
+      - KAFKA_TOPIC_VDA5050_STATE=${KAFKA_TOPIC_VDA5050_STATE:-fleet-vda5050-state}
       - KAFKA_TOPIC_FLEET_FEATURES=${KAFKA_TOPIC_FLEET_FEATURES:-fleet-features}
       - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
@@ -89,9 +89,9 @@ services:
       - S3_SECRET_KEY=${S3_SECRET_KEY:-admin123456}
       - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
       - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
-      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.vda5050_state}
+      - ICEBERG_BRONZE_TABLE=${ICEBERG_BRONZE_TABLE:-lakehouse.bronze.fleet_vda5050_state}
       - ICEBERG_SILVER_TABLE=${ICEBERG_SILVER_TABLE:-lakehouse.silver.fleet_features}
-      - ICEBERG_GOLD_TABLE=${ICEBERG_GOLD_TABLE:-lakehouse.gold.ai_anomalies}
+      - ICEBERG_GOLD_TABLE=${ICEBERG_GOLD_TABLE:-lakehouse.gold.fleet_anomalies}
       - ICEBERG_TARGET_FILE_SIZE_BYTES=${ICEBERG_TARGET_FILE_SIZE_BYTES:-67108864}
       - ICEBERG_RETAIN_LAST_SNAPSHOTS=${ICEBERG_RETAIN_LAST_SNAPSHOTS:-2}
       - MAINTENANCE_TARGET=${MAINTENANCE_TARGET:-all}
@@ -129,7 +129,7 @@ services:
       - PYTHONPATH=/opt/spark/src:/opt/spark/ml-common
       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BROKER:-redpanda:9092}
       - KAFKA_TOPIC_FLEET_FEATURES=${KAFKA_TOPIC_FLEET_FEATURES:-fleet-features}
-      - KAFKA_TOPIC_AI_ANOMALIES=${KAFKA_TOPIC_AI_ANOMALIES:-ai-anomalies}
+      - KAFKA_TOPIC_AI_ANOMALIES=${KAFKA_TOPIC_AI_ANOMALIES:-fleet-anomalies}
       - KAFKA_STARTING_OFFSETS_INFERENCE=${KAFKA_STARTING_OFFSETS_INFERENCE:-latest}
       - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-admin}
@@ -137,7 +137,7 @@ services:
       - S3_CHECKPOINT_BASE=${S3_CHECKPOINT_BASE:-s3a://lakehouse/checkpoints}
       - ICEBERG_CATALOG=${ICEBERG_CATALOG:-lakehouse}
       - ICEBERG_WAREHOUSE=${ICEBERG_WAREHOUSE:-s3a://lakehouse/iceberg}
-      - ICEBERG_GOLD_TABLE=${ICEBERG_GOLD_TABLE:-lakehouse.gold.ai_anomalies}
+      - ICEBERG_GOLD_TABLE=${ICEBERG_GOLD_TABLE:-lakehouse.gold.fleet_anomalies}
       - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       - MLFLOW_REGISTERED_MODEL_NAME=${MLFLOW_REGISTERED_MODEL_NAME:-agv-gru-autoencoder}
       - MLFLOW_MODEL_STAGE=${MLFLOW_MODEL_STAGE:-Production}

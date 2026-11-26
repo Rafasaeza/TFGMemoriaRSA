@@ -240,7 +240,7 @@ def generate_drawio_xml():
     )
     cell(
         "i5",
-        "<b>ai-anomalies</b><br><font color='#595959'>normal / suspicious / anomalous</font>",
+        "<b>fleet-anomalies</b><br><font color='#595959'>normal / suspicious / anomalous</font>",
         box,
         1020,
         480,
