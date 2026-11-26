@@ -186,14 +186,19 @@ Table~\ref{tab:fault-effects} places each fault against healthy running.
 \label{sec:mqtt_broker_implementation}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_mqtt}.}
 
-In the proposed architecture, Message Queuing Telemetry Transport (MQTT) serves as the lightweight edge messaging protocol connecting autonomous mobile robots to the data platform. As specified by the VDA~5050 standard, vehicle state and order messages are published over MQTT topics. To operationalize this layer within the containerized platform, the broker is deployed as a lightweight, containerised ingress service. The companion Telegraf bridge that forwards this edge traffic to the central event streaming backbone is described separately in Section~\ref{sec:stream_integration_implementation}.
+Message Queuing Telemetry Transport (MQTT) is the protocol used to reach the vehicles, as required by VDA~5050. Vehicle state and orders are published on MQTT topics, so the fleet and the orchestrator meet at one broker. That broker is a containerised ingress service.
 
 \subsection{Eclipse Mosquitto Deployment and Broker Configuration}
 \label{subsec:mosquitto_implementation}
 
-The MQTT broker is implemented using Eclipse Mosquitto, deployed as a containerized service (\texttt{mosquitto}) on the dedicated Docker bridge network \texttt{mqtt-net}. The broker exposes standard port 1883 for unencrypted edge communication within the container environment.
+The broker is Eclipse Mosquitto, the service \texttt{mosquitto}, on the Docker bridge network \texttt{mqtt-net}. Listing~\ref{lst:mosquitto-conf} is \texttt{mosquitto.conf}. Both listeners allow anonymous clients, and log output goes to \texttt{stdout}.
 
-Listing~\ref{lst:mosquitto-conf} illustrates the broker configuration (\texttt{mosquitto.conf}). Persistence is enabled, so a Quality-of-Service 1 subscriber can resume after a disconnect and the broker can keep that queue across a restart. Message durability for the analytical path remains with Redpanda. A second listener on port 9883 speaks MQTT over WebSockets, which is how the digital twin reads the fleet from the browser. Both listeners allow anonymous clients. Log output goes to \texttt{stdout}.
+\begin{itemize}
+    \item Port 1883 speaks ordinary MQTT, without encryption. Node-RED uses this listener. It publishes the orders and the instant actions of the simulated factory, and it reads the state and the connection of each vehicle. The simulator publishes and receives on the same port. Telegraf also subscribes here, to the state topic only, and forwards those messages to Redpanda.
+    \item Port 9883 speaks MQTT over WebSockets. The digital twin uses it to read the fleet from the browser. It does not publish orders.
+\end{itemize}
+
+Persistence is enabled, and the store is kept on a Docker volume. A subscriber that connects with a persistent session can resume after a disconnect, and the queued messages survive a broker restart. This file does not set the Quality of Service. Telegraf subscribes at QoS~1 with a persistent session, as stated in Section~\ref{subsec:telegraf_integration}. The durable copy used by the analytical path remains in Redpanda.
 
 \begin{lstlisting}[language=configToml, caption={Mosquitto configuration (mosquitto.conf)}, label={lst:mosquitto-conf}, basicstyle=\ttfamily\small, breaklines=true]
 persistence true
@@ -260,33 +265,17 @@ This section consolidates the connector services that bridge the different archi
 \label{subsec:telegraf_integration}
 \textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_streaming_integration}.}
 
-A key architectural requirement is the clean decoupling between the edge MQTT protocol and the central Redpanda streaming tier. Because the MQTT boundary only requires protocol adaptation between MQTT and Kafka-compatible streams, Telegraf was selected as a dedicated telemetry ingestion agent.
+This subsection is the implementation of the bridge decided in Section~\ref{subsec:arch_mqtt_ingestion}. The state has to leave Mosquitto and enter Redpanda while the vehicles remain on MQTT, so Telegraf is the process that crosses the two networks: it subscribes on \texttt{mqtt-net} and publishes on \texttt{redpanda-net}, whereas the simulator and Mosquitto have no route of their own into the Kafka network. It is the second service of Listing~\ref{lst:mqtt-broker-compose}. The configuration is mounted read-only, and the two broker addresses are taken from the environment, so the same image can be pointed at another broker without rewriting the file.
 
-Telegraf operates as a dual-homed container attached simultaneously to \texttt{mqtt-net} and \texttt{redpanda-net}. This network topology enforces strict isolation: source systems and the MQTT broker remain in \texttt{mqtt-net} with zero direct exposure to the internal Kafka network, while Telegraf transparently forwards incoming payloads across the boundary.
+Only the state topic is carried across. The subscription \texttt{uagv/v2/+/+/state} matches every manufacturer and every serial number, whereas orders, instant actions, and the \texttt{connection} and \texttt{visualization} topics remain on MQTT for the orchestrator and the vehicles. The payload is kept as a single string, which means the bridge stores the JSON without parsing it, and the renaming and the checks are left to the Spark Bronze job.
 
-Telegraf is the second service of Listing~\ref{lst:mqtt-broker-compose}. It mounts its configuration read-only and takes the broker addresses from the environment.
+From that topic the bridge reads the manufacturer and the serial number, and it builds the key \texttt{source\_asset\_key} in the form \texttt{<manufacturer>:<serial\_number>}. On the fleet specified for the Node-RED factory use case (Section~\ref{subsec:factory-orchestrator-implementation}), the vehicles run from \texttt{rikeb:t11} to \texttt{rikeb:t15}. That key becomes the Kafka record key, so the states of one vehicle hash to one partition and keep their order, while two manufacturers that reuse a serial number do not collide. The body written to \texttt{vda5050-state} is still the original string. Five headers travel with it, naming the serial, the manufacturer, the key, the message type and the original MQTT topic, and the record is compressed with Zstandard. Whatever has arrived since the previous write is sent on once a second, and if Redpanda is not yet accepting connections when the process starts, the output retries instead of exiting. The configuration is Listing~\ref{lst:telegraf-conf}.
 
-
-The bridging logic is governed by three coordinated stages configured in \texttt{telegraf.conf} (Listing~\ref{lst:telegraf-conf}):
-\begin{enumerate}
-    \item \textbf{MQTT Telemetry Ingestion (\texttt{inputs.mqtt\_consumer}):} Telegraf subscribes to the VDA~5050 state topic hierarchy using the wildcard pattern \texttt{uagv/v2/+/+/state}, matching all vehicles across arbitrary manufacturers. Ingestion uses Quality of Service 1 (QoS~1) with persistent sessions, preventing telemetry loss during momentary network disconnects. Telemetry payloads are ingested as raw string values (\texttt{data\_format = "value"}) to prevent premature deserialization.
-    \item \textbf{Topic Parsing and Composite Key Generation (\texttt{processors.template}):} The hierarchical MQTT topic structure is parsed into semantic tags:
-    \begin{quote}
-        \texttt{\_/\_/source\_manufacturer/source\_serial\_number/message\_type}
-    \end{quote}
-    A processor template constructs a composite key \texttt{source\_asset\_key} formatted as \texttt{<manufacturer>:<serial\_number>} (e.g., \texttt{rikeb:s11}). This composite key serves as the Kafka message routing key (\texttt{routing\_tag}), guaranteeing two crucial properties in Redpanda:
-    \begin{itemize}
-        \item \emph{Collision avoidance:} AGVs from different manufacturers with identical serial numbers are unambiguously partitioned.
-        \item \emph{Chronological partition ordering:} Messages from the same physical asset consistently hash to the same Kafka partition, ensuring strict temporal order for downstream state reconstruction.
-    \end{itemize}
-    \item \textbf{Unmutated Kafka Publishing and Header Enrichment (\texttt{outputs.kafka}):} Telegraf publishes to the centralized \texttt{vda5050-state} topic in Redpanda. Crucially, the VDA~5050 JSON payload is emitted completely unmodified (\texttt{template = '\{\{ .Field "value" \}\}'}). Schema transformations and data validation are intentionally deferred to downstream Spark Structured Streaming jobs, preserving the raw data fidelity required for the Bronze lakehouse tier. Simultaneously, Telegraf appends enriched Kafka record headers (\texttt{source\_serial\_number}, \texttt{source\_manufacturer}, \texttt{source\_asset\_key}, \texttt{message\_type}, and \texttt{mqtt\_topic}), providing full protocol provenance to consumers without altering message bodies.
-\end{enumerate}
+The subscription uses Quality of Service 1 and a persistent session under the fixed client identifier \texttt{telegraf-vda5050}, and a message is confirmed to Mosquitto only once Redpanda has accepted the record. While Telegraf is away and Mosquitto is still up, the broker therefore keeps those messages and returns them when the same client comes back, and the queue also survives a restart of Mosquitto because persistence is enabled. If instead Redpanda stops accepting writes, the unconfirmed states sit in that same queue. The broker default holds about 1000 messages, which this configuration leaves unchanged, so five vehicles fill it in about three minutes. A state the simulator never published, because Mosquitto itself was down, is not recovered afterwards. Idempotent writes on the producer then keep a retry from storing a second copy of a record that Redpanda had already accepted.
 
 \begin{lstlisting}[language=configToml, caption={Telegraf bridging configuration (telegraf.conf)}, label={lst:telegraf-conf}, basicstyle=\ttfamily\small, breaklines=true]
 [agent]
-  interval = "1s"
   flush_interval = "1s"
-  precision = "1ms"
   omit_hostname = true
 
 [[inputs.mqtt_consumer]]
@@ -311,9 +300,9 @@ The bridging logic is governed by three coordinated stages configured in \texttt
   brokers = ["${KAFKA_BROKER}"]
   topic = "vda5050-state"
   routing_tag = "source_asset_key"
-  required_acks = -1
   idempotent_writes = true
   compression_codec = 4
+  max_retry = 5
   startup_error_behavior = "retry"
   data_format = "template"
   template = '{{ .Field "value" }}'

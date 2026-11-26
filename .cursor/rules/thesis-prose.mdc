@@ -1,0 +1,27 @@
+---
+description: British academic English for this bachelor thesis.
+alwaysApply: true
+---
+
+# Thesis prose
+
+Write British academic English, in the register of the finished chapters (Introduction and State of the Art).
+
+- Impersonal. Use "this section", "the model", "this work". Do not use "we" or a spoken aside.
+- Write a paragraph as one decision or one mechanism. Join the claim to its reason with a connector (because, so, while, whereas, once, which means), and let the next sentence carry the consequence. Do not stack short subject-verb sentences that each drop one fact and stop.
+- Define a term at first use. Do not make the reader supply the meaning.
+- State a modelling omission together with the reason it is acceptable.
+- Use a number only when it distinguishes one case from another. Leave full formulas in the simulator specification (the appendix listing).
+- The simulator keeps the correlations of a healthy vehicle so that an autoencoder can learn them. It does not reproduce the robot, or its faults, in full. A fault is a case in which those healthy correlations no longer hold.
+- Cite a standard or an external claim. Do not name ISO, VDA, or a paper without a bibliography entry.
+- British spelling: modelling, labelled, quantised, behaviour, analogue, organised.
+
+Avoid: crucially, robust, thoroughly, leverage, delve, and "realistic" where the text has already said the model is not a full replica.
+
+```text
+Bad:  The vehicles remain on MQTT. Redpanda speaks the Kafka protocol.
+      A separate process carries state from one to the other.
+Good: The state has to leave Mosquitto and enter Redpanda while the
+      vehicles remain on MQTT, so Telegraf is the process that crosses
+      the two networks.
+```
