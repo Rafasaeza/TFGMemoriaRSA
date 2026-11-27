@@ -87,6 +87,11 @@ The separation of training and inference responsibilities allows each workload t
 Training processes prioritize model accuracy and experimentation capabilities, whereas inference processes prioritize low latency, scalability, and operational reliability.
 A newly trained model reaches the stream by promotion in the registry, without modifying the ingestion or feature pipelines.
 
+\subsection{Operational and Analytical Stores}
+\label{subsec:bifurcated-storage}
+
+The platform keeps two copies of the telemetry, because a dashboard and a training scan do not want the same store. The operational copy is a time-series table queried by SQL over a short recent window, so an operator can see the fleet while it moves. The analytical copy is the lakehouse: append-only Parquet on object storage, in the Bronze, Silver and Gold tables, and it is what a training run scans. A heavy scan of the historical tables therefore does not run against the database that is drawing the boards, and a board refresh does not list the lakehouse. The engine of the operational copy is QuestDB, for the reasons in Section~\ref{subsec:arch_questdb}.
+
 \section{Source Systems Layer}
 \label{sec:arch_source_systems}
 \textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:source_system_simulation}.}
@@ -183,27 +188,25 @@ A critical requirement of the event-driven architecture is ensuring clean separa
 Rather than tightly coupling producers and consumers to the central streaming bus, the integration topology relies on standardized connectors and specialized bridges.
 This approach isolates protocol adaptations to the respective system boundaries.
 
-Figure~\ref{fig:streaming-integration-architecture} shows the services that attach to Redpanda: Telegraf and Apache Spark. The same Telegraf process writes the curated topics into QuestDB.
+Figure~\ref{fig:streaming-integration-architecture} shows that path. Telegraf stands between the MQTT broker and Redpanda, and between Redpanda and QuestDB. Spark is attached to the broker in both directions, because it reads the state topic and publishes the curated rows and the scores.
 
 \begin{figure}[ht]
   \centering
   \includegraphics[width=.90\linewidth]{streaming-integration-architecture.drawio.png}
-  \caption{Telegraf and Apache Spark attached to the Redpanda broker. Telegraf also writes QuestDB.}
+  \caption{Telegraf between the MQTT broker, Redpanda and QuestDB. Spark reads and writes the broker.}
   \label{fig:streaming-integration-architecture}
 \end{figure}
 
-The rationale and implementation details for each integration interface are summarized below:
-
-\subsection{MQTT to Event Streaming Ingestion Layer}
+\subsection{Telegraf}
 \label{subsec:arch_mqtt_ingestion}
 
-The state published on Mosquitto has to reach Redpanda, while the vehicles remain on the MQTT interface required by VDA~5050. The step between the two brokers was therefore treated as a protocol bridge, and the document had to leave that bridge as it had been published.
+The figure draws one agent on both sides of the broker. The vehicles remain on MQTT, and Grafana remains on SQL, so neither of those two speaks the Kafka API.
 
-A Kafka Connect source was considered, because Connect is the usual way to attach an external system to a Kafka-compatible bus. That framework earns its place when a connector must be supervised, a schema must evolve, or the record must be reshaped before it is stored. None of that belongs to this ingestion step, which only has to subscribe to the state topic and publish the same JSON on \texttt{fleet-vda5050-state}. Telegraf was selected for that reason: one process consumes MQTT and produces to Redpanda, and the payload is forwarded unchanged. The same process is the sink into QuestDB described in the next subsection, so the platform does not add a second bridge for the operational tables.
+\paragraph{From Mosquitto to Redpanda.}
+The state published on Mosquitto has to reach Redpanda, while the vehicles remain on the MQTT interface required by VDA~5050. The step between the two brokers was therefore treated as a protocol bridge, and the document had to leave that bridge as it had been published. A Kafka Connect source was considered, because Connect is the usual way to attach an external system to a Kafka-compatible bus. That framework earns its place when a connector must be supervised, a schema must evolve, or the record must be reshaped before it is stored. None of that belongs to this step, which only has to subscribe to the state topic and publish the same JSON on \texttt{fleet-vda5050-state}. Telegraf consumes MQTT and produces to Redpanda, and the payload is forwarded unchanged.
 
-\subsection{Streaming to Time-Series Persistence: Telegraf into QuestDB}
-
-Grafana reads QuestDB, so the operational store has to receive the rows the boards plot, and neither Spark nor QuestDB should speak the other's protocol. The step is a sink from Redpanda into the database. Telegraf was selected for it, because the process that already crosses MQTT and Redpanda can consume the curated topics and write the line protocol QuestDB accepts over HTTP. Apache Kafka Connect was considered, since that framework supervises appending a topic to an external store, and it was set aside: two typed JSON topics do not need a second cluster, its internal topics, or a registration step. A second write from the Spark jobs would have tied the dashboard store to those jobs.
+\paragraph{From Redpanda to QuestDB.}
+Just as a state on Mosquitto has to reach Redpanda, a row on Redpanda has to reach QuestDB, so the same agent makes that crossing as well. Grafana reads QuestDB, and neither Spark nor QuestDB should speak the other's protocol. Telegraf consumes \texttt{fleet-features} and \texttt{fleet-anomalies} and writes the line protocol QuestDB accepts over HTTP. Apache Kafka Connect was considered for this second step, since that framework supervises appending a topic to an external store, and it was set aside: two typed JSON topics do not need a second cluster, its internal topics, or a registration step. A second write from the Spark jobs would have tied the dashboard store to those jobs.
 
 The topics that enter QuestDB are \texttt{fleet-features} and \texttt{fleet-anomalies}, because those are the streams the boards query: the curated vehicle row, and the score of each window. The raw topic \texttt{fleet-vda5050-state} was considered and set aside. It still carries the nested VDA~5050 state document, whereas Grafana expects a row of scalars, and that document is already kept in the Bronze table. The two writes therefore follow the publications Spark has already shaped.
 
@@ -330,17 +333,13 @@ To prevent performance degradation without burdening the real-time ingestion pat
 \end{enumerate}
 Crucially, the maintenance process is triggered on demand through automated metadata inspection rather than arbitrary execution schedules, optimizing compute resource utilization in resource-constrained edge deployments.
 
-\subsection{Bifurcated Storage Architecture: Operational vs. Analytical Persistence}
-\label{subsec:bifurcated-storage}
+\section{Operational Store: QuestDB}
+\label{subsec:arch_questdb}
+\textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:questdb-implementation}.}
 
-A core architectural decision of the proposed platform is the explicit decoupling between the \textbf{operational time-series store} (QuestDB) and the \textbf{analytical object store} (MinIO):
+As set out in Section~\ref{subsec:bifurcated-storage}, the platform needs an operational store so that the dashboards an operator watches can be filled without scanning the lakehouse. Those boards are the live view of the fleet and of the anomaly scores, and Grafana draws them from a time-series database, because a trace that moves with the clock is a query on a designated time rather than a scan of the historical tables.
 
-\begin{itemize}
-    \item \textbf{Operational Path (QuestDB):} Optimized for low-latency ingest and high-frequency SQL aggregation across rolling time windows, dedicated to live operator visualization in Grafana.
-    \item \textbf{Analytical Path (MinIO / Lakehouse):} Optimized for massive, append-only historical telemetry persistence in columnar Parquet format, multi-tier Medallion curation, and high-throughput batch scanning required for offline machine learning model training.
-\end{itemize}
-
-This bifurcated storage design isolates analytical queries and heavy machine learning workloads from live operational monitoring, ensuring that intensive model training scans do not degrade dashboard rendering performance or message ingestion throughput.
+QuestDB was the engine kept for that role~\cite{questdb}. A table there takes the event time as its clock, and the boards group a channel with \texttt{SAMPLE BY} over the interval the operator has open. Telegraf already writes the InfluxDB line protocol, and Grafana already opens a PostgreSQL session, so the same engine meets both sides of the path. The mission of the store is to show the anomaly scores as they arrive and over a short recent window, so the tables expire after seven days, and the fact that QuestDB carries that limit as a property of the table was part of the choice. A count that crosses years remains a query on the Gold table in Iceberg, which is the copy that is kept.
 
 \section{Machine Learning Layer}
 \label{sec:arch_ml}

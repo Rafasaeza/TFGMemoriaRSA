@@ -232,11 +232,14 @@ A health check runs \texttt{rpk cluster health}. Console and the initialisation 
 
 This section describes the process that bridges the tiers set out in Chapter~\ref{chap:system_architecture}. One Telegraf agent does both crossings: it forwards edge MQTT telemetry into Redpanda, and it writes the curated Redpanda topics into QuestDB.
 
-\subsection{Telemetry Bridging via Telegraf}
+\subsection{Telegraf}
 \label{subsec:telegraf_integration}
-\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_streaming_integration}.}
+\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{subsec:arch_mqtt_ingestion}.}
 
-This subsection is the implementation of the bridge decided in Section~\ref{subsec:arch_mqtt_ingestion}. The state has to leave Mosquitto and enter Redpanda while the vehicles remain on MQTT, so Telegraf is the process that crosses the two networks: it subscribes on \texttt{mqtt-net} and publishes on \texttt{redpanda-net}, whereas the simulator and Mosquitto have no route of their own into the Kafka network. The service is \texttt{telemetry-bridge}, Listing~\ref{lst:telemetry-bridge-compose}, and it also joins \texttt{questdb-net}, because the same process writes the operational tables. The configuration is mounted read-only, and the broker addresses are taken from the environment, so the same image can be pointed at another broker without rewriting the file.
+The service is \texttt{telemetry-bridge}, Listing~\ref{lst:telemetry-bridge-compose}. It joins \texttt{mqtt-net}, \texttt{redpanda-net} and \texttt{questdb-net}. The configuration is mounted read-only, and the broker addresses are taken from the environment, so the same image can be pointed at another broker without rewriting the file. The bridge starts only after the broker is healthy, \texttt{redpanda-init} has created the topics, and \texttt{questdb-init} has applied the SQL files. That order matters because Redpanda, in the development mode used here, would otherwise create a missing topic with one partition, and QuestDB would otherwise create a missing table from the first line.
+
+\paragraph{From Mosquitto to Redpanda.}
+The state has to leave Mosquitto and enter Redpanda while the vehicles remain on MQTT, so Telegraf subscribes on \texttt{mqtt-net} and publishes on \texttt{redpanda-net}, whereas the simulator and Mosquitto have no route of their own into the Kafka network.
 
 Only the state topic is carried across. The subscription \texttt{uagv/v2/+/+/state} matches every manufacturer and every serial number, whereas orders, instant actions, and the \texttt{connection} and \texttt{visualization} topics remain on MQTT for the orchestrator and the vehicles. The payload is kept as a single string, which means the bridge stores the JSON without parsing it, and the renaming and the checks are left to the Spark Bronze job.
 
@@ -244,15 +247,10 @@ From that topic the bridge reads the manufacturer and the serial number, and it 
 
 The subscription uses Quality of Service 1 and a persistent session under the fixed client identifier \texttt{telegraf-vda5050-bridge}, and a message is confirmed to Mosquitto only once Redpanda has accepted the record. While Telegraf is away and Mosquitto is still up, the broker therefore keeps those messages and returns them when the same client comes back, and the queue also survives a restart of Mosquitto because persistence is enabled. If instead Redpanda stops accepting writes, the unconfirmed states sit in that same queue. The broker default holds about 1000 messages, which this configuration leaves unchanged, so five vehicles fill it in about three minutes. A state the simulator never published, because Mosquitto itself was down, is not recovered afterwards. Idempotent writes on the producer then keep a retry from storing a second copy of a record that Redpanda had already accepted.
 
-\subsection{Telegraf writes QuestDB}
-\label{subsec:questdb-kafka-connect}
-\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{sec:arch_streaming_integration}.}
-
-The same \texttt{telemetry-bridge} process consumes \texttt{fleet-features} and \texttt{fleet-anomalies}. Each consumer has its own group, so a restart continues from the last committed record rather than from the start of the topic. A name filter keeps the MQTT metric on the Kafka output and these two measurements on the QuestDB output, which means a state message is not written into a table and a feature row is not published back onto Redpanda. The bridge starts only after the broker is healthy, \texttt{redpanda-init} has created the topics, and \texttt{questdb-init} has applied the SQL files. That order matters because Redpanda, in the development mode used here, would otherwise create a missing topic with one partition, and QuestDB would otherwise create a missing table from the first line.
+\paragraph{From Redpanda to QuestDB.}
+The same \texttt{telemetry-bridge} is the path into QuestDB. A name filter keeps the MQTT metric on the Kafka output, and puts \texttt{fleet-features} and \texttt{fleet-anomalies} on the QuestDB output, so a state message is not written into a table and a feature row is not published back onto Redpanda. Each of those two consumers has its own group, so a restart continues from the last committed record rather than from the start of the topic.
 
 The value is parsed as JSON. The field \texttt{timestamp} is the designated time. Strings that name a vehicle, a map, a model, or a channel are tags, and the measurements are typed fields, so the line protocol matches the columns the SQL has already declared. The write is InfluxDB line protocol over HTTP, posted to port 9000 of QuestDB, which is the same port as the console. The Kafka key is not a column: the identity is inside the JSON. \texttt{agv\_id} is the serial number, and \texttt{vehicle\_key} is \texttt{manufacturer:serialNumber}.
-
-\texttt{fleet-features} lands in the table of that name. This replaces the earlier sink on \texttt{fleet-vda5050-state}. That topic carried the nested state message and had to be flattened on the way in. The Silver job now publishes a row that already matches the table. \texttt{fleet-anomalies} lands in its own table. The event is already scalar: the window bounds, the model, the score, both thresholds, the class, a short summary, and the three leading channels. There is no nested array to drop.
 
 \section{Stream Processing Layer: Apache Spark Implementation}
 \label{sec:spark-implementation}
@@ -332,7 +330,7 @@ The trigger interval is \texttt{PROCESSING\_INTERVAL\_SILVER}, three seconds by 
 
 The third streaming stage is \texttt{anomaly\_detector.py}, submitted by \texttt{spark-anomaly-detector}. It consumes \texttt{fleet-features}. It does not read the Silver table it has just been written beside. The windowing, the production model, the scaler, and the classes \texttt{NORMAL}, \texttt{SUSPICIOUS}, and \texttt{ANOMALY} are those of Section~\ref{subsec:ml-inference-implementation}.
 
-Each scored window is appended to \texttt{lakehouse.gold.fleet\_anomalies} and written to \texttt{fleet-anomalies}. The Kafka key and the field \texttt{vehicle\_key} are both \texttt{manufacturer:serialNumber}, while \texttt{agv\_id} remains the serial, so the QuestDB symbol \texttt{vehicle\_key} is the same vehicle as the partition. The event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. The Iceberg row keeps those scalar fields and is partitioned by day. QuestDB ingests the topic through the Telegraf bridge of Section~\ref{subsec:questdb-kafka-connect} and drops it after seven days. A count by year is a query on the Gold table, which still holds the rows after maintenance has compacted the small files. Maintenance expires old snapshots and keeps the last two, so the comparison uses the current table rather than an old snapshot. If the Iceberg append fails, the job logs the error and still publishes to Kafka, so the dashboard is not blocked by the archive. The checkpoint is local to the container and is removed on start, so a restart follows the live tail of \texttt{fleet-features}. An interval that was missed remains in the Silver table and can be read again by a training-style scan.
+Each scored window is appended to \texttt{lakehouse.gold.fleet\_anomalies} and written to \texttt{fleet-anomalies}. The Kafka key and the field \texttt{vehicle\_key} are both \texttt{manufacturer:serialNumber}, while \texttt{agv\_id} remains the serial, so the QuestDB symbol \texttt{vehicle\_key} is the same vehicle as the partition. The event carries the window bounds, the model name and version, the score, both thresholds, the class, and up to three channels with their share of the error. The Iceberg row keeps those scalar fields and is partitioned by day. QuestDB ingests the topic through the Telegraf bridge of Section~\ref{subsec:telegraf_integration} and drops it after seven days. A count by year is a query on the Gold table, which still holds the rows after maintenance has compacted the small files. Maintenance expires old snapshots and keeps the last two, so the comparison uses the current table rather than an old snapshot. If the Iceberg append fails, the job logs the error and still publishes to Kafka, so the dashboard is not blocked by the archive. The checkpoint is local to the container and is removed on start, so a restart follows the live tail of \texttt{fleet-features}. An interval that was missed remains in the Silver table and can be read again by a training-style scan.
 
 \subsection{Lakehouse Maintenance Job}
 \label{subsec:lakehouse-maintenance-job}
@@ -389,11 +387,11 @@ The three tables are partitioned by day on \texttt{timestamp}. Inside a partitio
 
 \section{QuestDB Implementation and Integration}
 \label{sec:questdb-implementation}
-\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{subsec:bifurcated-storage}.}
+\textit{Architectural counterpart: Chapter~\ref{chap:system_architecture}, Section~\ref{subsec:arch_questdb}.}
 
-As established in the architectural design (Chapter~\ref{chap:system_architecture}), the platform adopts a bifurcated persistence strategy that strictly separates the analytical lakehouse storage (MinIO and Apache Iceberg) from the operational time-series database. While the lakehouse is optimized for heavy, multi-tier batch analytics and offline model training, real-time observability requires a database capable of sub-second streaming ingestion and high-frequency SQL aggregations across sliding time windows. To fulfill this operational role, \textbf{QuestDB} (version 9.4.3) was selected and integrated into the containerized platform.
+As established in the architectural design (Chapter~\ref{chap:system_architecture}), the platform adopts a bifurcated persistence strategy that strictly separates the analytical lakehouse storage (MinIO and Apache Iceberg) from the operational time-series database, and that separation is motivated by the use of Grafana as the visualisation entry point. Among the alternatives considered for that store, QuestDB was selected and integrated into the platform.
 
-The QuestDB subsystem receives the operational rows from the Telegraf bridge of Section~\ref{subsec:questdb-kafka-connect}. That process appends the Silver publication \texttt{fleet-features} and the inference publication \texttt{fleet-anomalies}. The raw \texttt{fleet-vda5050-state} topic is not written here. It remains the input of the Bronze and Silver Spark jobs, and its history stays in the lakehouse.
+The QuestDB subsystem receives the operational rows from the Telegraf bridge of Section~\ref{subsec:telegraf_integration}. That process appends the Silver publication \texttt{fleet-features} and the inference publication \texttt{fleet-anomalies}. The raw \texttt{fleet-vda5050-state} topic is not written here. It remains the input of the Bronze and Silver Spark jobs, and its history stays in the lakehouse.
 
 \subsection{Database Deployment and Schema Architecture}
 \label{subsec:questdb-deployment-schema}
@@ -406,24 +404,9 @@ QuestDB opens several listeners from one process. In this deployment two of them
     \item \textbf{PostgreSQL wire protocol (port 8812):} QuestDB speaks the PostgreSQL connection protocol, and the SQL it runs is its own. A read-only user (\texttt{QDB\_PG\_READONLY\_USER: grafana}) is configured, so Grafana can query the tables without a permission to write.
 \end{itemize}
 
-The line-protocol listener on TCP port 9009 is disabled. The bridge already writes that protocol over HTTP, and at the rate of this fleet the two transports are not distinguishable. A separate minimal HTTP server on port 9003 answers \texttt{/status}. The health check uses it, and the port is not published, so a busy console does not decide whether the process is alive.
+The TCP listener for the line protocol, port 9009, is disabled, because no service writes to it, and an unused listener would occupy a port and the memory set aside for it. A separate minimal HTTP server on port 9003 answers \texttt{/status}. The health check uses it, and the port is not published, so a busy console does not decide whether the process is alive.
 
-To automate database table provisioning upon initial startup, a one-shot container (\texttt{questdb-init}) is defined using \texttt{curlimages/curl}. It executes after QuestDB reports a healthy state and submits every file in \texttt{schema/} to the \texttt{/exec} endpoint, one statement at a time.
-
-Two tables are created, both designated on \texttt{timestamp}, partitioned by day, written with a write-ahead log, and retained for seven days. \texttt{fleet\_features} stores the Silver row: \texttt{manufacturer}, the serial \texttt{agv\_id}, and \texttt{vehicle\_key} as symbols, the position and the kinematic and electrical channels as doubles, and the driving, charging, and fault flags as booleans. \texttt{fleet\_anomalies} stores one scored window: the same three identity symbols, the model name and version, the score, the warning and anomaly thresholds, the class, the window bounds, a short summary of the contributing channels, and the three leading channels with their share of the error. The column lists are the ones the bridge declares, so an append does not have to alter the table.
-
-\subsection{Automated Lifecycle and Dependency Management}
-\label{subsec:questdb-lifecycle}
-
-Service order is expressed with Docker health checks and the one-shot initialisation container:
-\begin{enumerate}
-    \item The \texttt{questdb} service starts its engine and reports readiness on port 9003.
-    \item The \texttt{questdb-init} service creates \texttt{fleet\_features} and \texttt{fleet\_anomalies}, then exits.
-    \item \texttt{telemetry-bridge} starts only after that init has finished, and after \texttt{redpanda-init} has created the topics.
-    \item Grafana, described in Section~\ref{sec:grafana_implementation}, starts after \texttt{questdb-init}, so a board is opened against tables that already exist.
-\end{enumerate}
-
-\texttt{questdb} and \texttt{questdb-init} are the QuestDB Compose file, Listing~\ref{lst:questdb-compose}. The bridge is its own file, Listing~\ref{lst:telemetry-bridge-compose}, because it also belongs to the MQTT and Redpanda networks. \texttt{questdb} publishes the console and the line protocol on port 9000 and the PostgreSQL wire on 8812, and it keeps \texttt{questdb-data}.
+To automate database table provisioning upon initial startup, a one-shot container (\texttt{questdb-init}) is defined using \texttt{curlimages/curl}. It executes after QuestDB reports a healthy state and submits every file in \texttt{schema/} to the \texttt{/exec} endpoint, one statement at a time. Those files are the two table definitions, Listings~\ref{lst:fleet-features-sql} and~\ref{lst:fleet-anomalies-sql}.
 
 \section{Machine Learning Pipeline Implementation}
 \label{sec:ml_pipeline_implementation}

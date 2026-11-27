@@ -2,7 +2,7 @@
 \chapter{Deployment Manifests and Simulator Specification}
 \label{app:deployment}
 
-This appendix collects the deployment files, the Telegraf bridge configuration, and the specification used to extend the vehicle simulator. Chapter~\ref{chap:system_implementation} describes what those files do. The listings are the files of the prototype, copied so the manuscript can be read without the repository open beside it. Credentials in them are the local development defaults.
+This appendix collects the deployment files, the Telegraf bridge configuration, the QuestDB table definitions, and the specification used to extend the vehicle simulator. Chapter~\ref{chap:system_implementation} describes what those files do. The listings are the files of the prototype, copied so the manuscript can be read without the repository open beside it. Credentials in them are the local development defaults.
 
 \section{Docker Compose}
 \label{sec:app_compose}
@@ -45,6 +45,15 @@ The root file includes one Compose file per subsystem, declares the bridge netwo
 The bridge in Section~\ref{subsec:telegraf_integration} is configured by this file. It is mounted into the Telegraf service of Listing~\ref{lst:telemetry-bridge-compose}.
 
 \lstinputlisting[language=configToml,caption={Telegraf bridging configuration (telegraf.conf)},label={lst:telegraf-conf},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/config/telegraf.conf}
+
+\section{QuestDB tables}
+\label{sec:app_questdb_schema}
+
+\texttt{questdb-init} applies these two files, as described in Section~\ref{subsec:questdb-deployment-schema}.
+
+\lstinputlisting[language=SQL,caption={QuestDB table \texttt{fleet\_features}},label={lst:fleet-features-sql},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/schema/fleet_features.sql}
+
+\lstinputlisting[language=SQL,caption={QuestDB table \texttt{fleet\_anomalies}},label={lst:fleet-anomalies-sql},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/schema/fleet_anomalies.sql}
 
 \section{Specification used to extend the simulator}
 \label{app:simulator_prompt}
