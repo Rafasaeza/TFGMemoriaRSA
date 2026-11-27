@@ -30,7 +30,7 @@ docker compose up -d --build
 
 Compose builds the local images (the simulator, the orchestrator, the digital twin, the portal, and the inference job) and pulls the others. The first start is the slow one. Later starts reuse the images. When the command returns, open the platform portal at \texttt{http://localhost:8080}. A service that is still starting shows as down for a short time. Refresh until the broker, Redpanda, MinIO, QuestDB, Grafana, MLflow, the orchestrator, and the twin answer. The one-shot containers that create the bucket, the topics, and the QuestDB tables exit on their own. That is expected.
 
-The factory anchors the five vehicles and then runs without further commands. Telemetry reaches Grafana after the Silver job has published \texttt{fleet-features} and Kafka Connect has written QuestDB. Anomaly scores appear only after a model version carries the \texttt{production} alias, as described in the user manual.
+The factory anchors the five vehicles and then runs without further commands. Telemetry reaches Grafana after the Silver job has published \texttt{fleet-features} and Telegraf has written QuestDB. Anomaly scores appear only after a model version carries the \texttt{production} alias, as described in the user manual.
 
 \section{Training run}
 
@@ -87,18 +87,16 @@ Mosquitto & \texttt{localhost:1883} & MQTT. WebSocket for the twin on \texttt{98
 \addlinespace
 QuestDB wire & \texttt{localhost:8812} & Read by Grafana. User \texttt{grafana} / \texttt{grafana}. \\
 \addlinespace
-QuestDB ILP & \texttt{localhost:9009} & Ingestion port. Not a user interface. \\
+Telegraf bridge & \texttt{localhost:8086} & Health of the MQTT and QuestDB bridge. Not a user interface. \\
 \addlinespace
 MinIO S3 API & \texttt{localhost:19000} & Object API, mapped from container port 9000. \\
 \addlinespace
 Redpanda & \texttt{localhost:19092} & Kafka protocol. Admin API on \texttt{19644}. \\
-\addlinespace
-Kafka Connect & \texttt{localhost:8083} & Connector status. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-The simulator, Telegraf, and the Spark jobs (\texttt{spark-vda5050-state}, \texttt{spark-fleet-features}, \texttt{spark-anomaly-detector}, and \texttt{spark-maintenance}) have no host port. They are reached through the portal only as health checks.
+The simulator and the Spark jobs (\texttt{spark-vda5050-state}, \texttt{spark-fleet-features}, \texttt{spark-anomaly-detector}, and \texttt{spark-maintenance}) have no host port. Telegraf publishes only its health port. They are reached through the portal as health checks.
 
 \chapter{User Manual}
 \label{app:user_manual}

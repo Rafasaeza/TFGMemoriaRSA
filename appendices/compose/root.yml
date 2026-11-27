@@ -8,6 +8,7 @@ include:
       - docker/source_systems/vda5050_vehicle_simulator/docker-compose.yml
       - docker/source_systems/vda5050_vehicle_simulator/docker-compose.override.yml
   - docker/redpanda/docker-compose.yml
+  - docker/telemetry-bridge/docker-compose.yml
   - docker/observability/questdb/docker-compose.yml
   - docker/observability/grafana/docker-compose.yml
   - docker/utils/platform-portal/docker-compose.yml
@@ -15,6 +16,7 @@ include:
   - docker/utils/digital-twin/docker-compose.yml
   - docker/stream-processing/spark/docker-compose.yml
   - docker/data-lakehouse/minio/docker-compose.yml
+  - docker/data-lakehouse/iceberg-rest/docker-compose.yml
   - docker/ml-module/docker-compose.yml
   - docker/mlflow/docker-compose.yml
 

@@ -1,0 +1,36 @@
+services:
+  telemetry-bridge:
+    image: telegraf:1.39-alpine
+    restart: unless-stopped
+    command: telegraf --config /etc/telegraf/conf/telegraf.conf
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/conf/telegraf.conf:ro
+    environment:
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
+      KAFKA_BROKER: ${KAFKA_BROKER:-redpanda:9092}
+      QUESTDB_ILP_URL: ${QUESTDB_ILP_URL:-http://questdb:9000}
+      KAFKA_TOPIC_VDA5050_STATE: ${KAFKA_TOPIC_VDA5050_STATE:-fleet-vda5050-state}
+      KAFKA_TOPIC_FLEET_FEATURES: ${KAFKA_TOPIC_FLEET_FEATURES:-fleet-features}
+      KAFKA_TOPIC_AI_ANOMALIES: ${KAFKA_TOPIC_AI_ANOMALIES:-fleet-anomalies}
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8086"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+      questdb:
+        condition: service_healthy
+      questdb-init:
+        condition: service_completed_successfully
+    networks:
+      - mqtt-net
+      - redpanda-net
+      - questdb-net

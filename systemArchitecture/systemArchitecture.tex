@@ -116,7 +116,7 @@ A study of the available brokers led to Eclipse Mosquitto. It was judged the mos
 \label{sec:arch_event_streaming}
 \textit{Implementation: Chapter~\ref{chap:system_implementation}, Section~\ref{sec:event_stream_implementation}.}
 
-MQTT is the way the platform reaches a vehicle, because VDA~5050 establishes it as the communication layer with the robot. Once a state has been accepted, the rest of the platform needs a log that keeps the message, can hand it to more than one reader, and can be read again. That log is a Kafka-compatible broker. Redpanda was selected because it speaks the Kafka API, so Spark Structured Streaming and Kafka Connect use their ordinary clients, and because the broker, the Raft consensus and the \texttt{rpk} tool live in one process \cite{raftgithub}. A separate ZooKeeper or KRaft controller is not required. The same distribution includes Redpanda Console, which is the page used to inspect topics, records and consumer groups. The deployment in Section~\ref{sec:event_stream_implementation} runs that broker as one process on one core.
+MQTT is the way the platform reaches a vehicle, because VDA~5050 establishes it as the communication layer with the robot. Once a state has been accepted, the rest of the platform needs a log that keeps the message, can hand it to more than one reader, and can be read again. That log is a Kafka-compatible broker. Redpanda was selected because it speaks the Kafka API, so Spark Structured Streaming and Telegraf use their ordinary clients, and because the broker, the Raft consensus and the \texttt{rpk} tool live in one process \cite{raftgithub}. A separate ZooKeeper or KRaft controller is not required. The same distribution includes Redpanda Console, which is the page used to inspect topics, records and consumer groups. The deployment in Section~\ref{sec:event_stream_implementation} runs that broker as one process on one core.
 
 \subsection{Kafka Topic Design}
 
@@ -158,7 +158,7 @@ manufacturer\newline serialNumber &
 Represents fleet-level operational features extracted and enriched from raw vehicle telemetry. &
 Processed telemetry, including derived kinematic and electrical features. &
 Apache Spark Structured Streaming. &
-Apache Spark Structured Streaming and QuestDB via Kafka Connect. \\
+Apache Spark Structured Streaming and Telegraf, which writes QuestDB. \\
 
 \midrule
 
@@ -167,7 +167,7 @@ manufacturer\newline serialNumber &
 Identifies the outputs of the artificial intelligence module, distinguishing anomaly results from raw telemetry and derived features. &
 Inference outputs, including anomaly scores, reconstruction errors, and diagnostic information. &
 Apache Spark Structured Streaming. &
-QuestDB via Kafka Connect. \\
+Telegraf, which writes QuestDB. \\
 
 \bottomrule
 \end{tabularx}
@@ -183,12 +183,12 @@ A critical requirement of the event-driven architecture is ensuring clean separa
 Rather than tightly coupling producers and consumers to the central streaming bus, the integration topology relies on standardized connectors and specialized bridges.
 This approach isolates protocol adaptations to the respective system boundaries.
 
-Figure~\ref{fig:streaming-integration-architecture} shows the three services that attach to Redpanda: Telegraf, Spark and Kafka Connect.
+Figure~\ref{fig:streaming-integration-architecture} shows the services that attach to Redpanda: Telegraf and Apache Spark. The same Telegraf process writes the curated topics into QuestDB.
 
 \begin{figure}[ht]
   \centering
   \includegraphics[width=.90\linewidth]{streaming-integration-architecture.drawio.png}
-  \caption{Telegraf, Apache Spark and Kafka Connect attached to the Redpanda broker.}
+  \caption{Telegraf and Apache Spark attached to the Redpanda broker. Telegraf also writes QuestDB.}
   \label{fig:streaming-integration-architecture}
 \end{figure}
 
@@ -199,13 +199,13 @@ The rationale and implementation details for each integration interface are summ
 
 The state published on Mosquitto has to reach Redpanda, while the vehicles remain on the MQTT interface required by VDA~5050. The step between the two brokers was therefore treated as a protocol bridge, and the document had to leave that bridge as it had been published.
 
-A Kafka Connect source was considered, because Connect is the usual way to attach an external system to a Kafka-compatible bus. That framework earns its place when a connector must be supervised, a schema must evolve, or the record must be reshaped before it is stored. None of that belongs to this ingestion step, which only has to subscribe to the state topic and publish the same JSON on \texttt{fleet-vda5050-state}. Telegraf was selected for that reason: one process consumes MQTT and produces to Redpanda, and the payload is forwarded unchanged. Kafka Connect stays in the architecture for a later task, the sink into QuestDB described in the next subsection, where the work is to append rows to a database.
+A Kafka Connect source was considered, because Connect is the usual way to attach an external system to a Kafka-compatible bus. That framework earns its place when a connector must be supervised, a schema must evolve, or the record must be reshaped before it is stored. None of that belongs to this ingestion step, which only has to subscribe to the state topic and publish the same JSON on \texttt{fleet-vda5050-state}. Telegraf was selected for that reason: one process consumes MQTT and produces to Redpanda, and the payload is forwarded unchanged. The same process is the sink into QuestDB described in the next subsection, so the platform does not add a second bridge for the operational tables.
 
-\subsection{Streaming to Time-Series Persistence: Decoupled Kafka Connect for QuestDB}
+\subsection{Streaming to Time-Series Persistence: Telegraf into QuestDB}
 
-Grafana reads QuestDB, so the operational store has to receive the rows the boards plot, and neither Spark nor QuestDB should speak the other's protocol. The step is a sink from Redpanda into the database. Apache Kafka Connect was selected, in sink mode with the QuestDB connector, because appending a topic to an external store is the task that framework supervises. A consumer built into the database, or a second write from the Spark jobs, would have tied the dashboard store to one of those processes.
+Grafana reads QuestDB, so the operational store has to receive the rows the boards plot, and neither Spark nor QuestDB should speak the other's protocol. The step is a sink from Redpanda into the database. Telegraf was selected for it, because the process that already crosses MQTT and Redpanda can consume the curated topics and write the line protocol QuestDB accepts over HTTP. Apache Kafka Connect was considered, since that framework supervises appending a topic to an external store, and it was set aside: two typed JSON topics do not need a second cluster, its internal topics, or a registration step. A second write from the Spark jobs would have tied the dashboard store to those jobs.
 
-The topics that enter QuestDB are \texttt{fleet-features} and \texttt{fleet-anomalies}, because those are the streams the boards query: the curated vehicle row, and the score of each window. The raw topic \texttt{fleet-vda5050-state} was considered and set aside. It still carries the nested VDA~5050 state document, whereas Grafana expects a row of scalars, and that document is already kept in the Bronze table. The two sinks therefore follow the publications Spark has already shaped.
+The topics that enter QuestDB are \texttt{fleet-features} and \texttt{fleet-anomalies}, because those are the streams the boards query: the curated vehicle row, and the score of each window. The raw topic \texttt{fleet-vda5050-state} was considered and set aside. It still carries the nested VDA~5050 state document, whereas Grafana expects a row of scalars, and that document is already kept in the Bronze table. The two writes therefore follow the publications Spark has already shaped.
 
 \subsection{Event Streaming to Analytical Processing Connectivity}
 

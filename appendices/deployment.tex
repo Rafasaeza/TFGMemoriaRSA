@@ -7,11 +7,11 @@ This appendix collects the deployment files, the Telegraf bridge configuration, 
 \section{Docker Compose}
 \label{sec:app_compose}
 
-The root file includes one Compose file per subsystem, declares the bridge networks, and mounts the partner certificate. The simulator include also applies the override that builds the image from source. Telegraf is not a file of its own: it is the second service of the MQTT broker file. Training is the \texttt{ml} profile of the machine-learning module and does not start with \texttt{docker compose up}.
+The root file includes one Compose file per subsystem, declares the bridge networks, and mounts the partner certificate. The simulator include also applies the override that builds the image from source. Telegraf is the telemetry-bridge file: it is no longer a service of the MQTT broker. Training is the \texttt{ml} profile of the machine-learning module and does not start with \texttt{docker compose up}.
 
 \lstinputlisting[language=yaml,caption={Root Compose file},label={lst:main-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/root.yml}
 
-\lstinputlisting[language=yaml,caption={MQTT broker and Telegraf},label={lst:mqtt-broker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/mqtt-broker.yml}
+\lstinputlisting[language=yaml,caption={MQTT broker},label={lst:mqtt-broker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/mqtt-broker.yml}
 
 \lstinputlisting[language=yaml,caption={Vehicle simulator},label={lst:vda5050-simulator-docker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/simulator.yml}
 
@@ -23,7 +23,9 @@ The root file includes one Compose file per subsystem, declares the bridge netwo
 
 \lstinputlisting[language=yaml,caption={MinIO},label={lst:minio-docker-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/minio.yml}
 
-\lstinputlisting[language=yaml,caption={QuestDB and Kafka Connect},label={lst:questdb-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/questdb.yml}
+\lstinputlisting[language=yaml,caption={Telemetry bridge},label={lst:telemetry-bridge-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/telemetry-bridge.yml}
+
+\lstinputlisting[language=yaml,caption={QuestDB},label={lst:questdb-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/questdb.yml}
 
 \lstinputlisting[language=yaml,caption={Grafana},label={lst:grafana-compose},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/compose/grafana.yml}
 
@@ -40,7 +42,7 @@ The root file includes one Compose file per subsystem, declares the bridge netwo
 \section{Telegraf configuration}
 \label{sec:app_telegraf}
 
-The bridge in Section~\ref{subsec:telegraf_integration} is configured by this file. It is mounted into the Telegraf service of Listing~\ref{lst:mqtt-broker-compose}.
+The bridge in Section~\ref{subsec:telegraf_integration} is configured by this file. It is mounted into the Telegraf service of Listing~\ref{lst:telemetry-bridge-compose}.
 
 \lstinputlisting[language=configToml,caption={Telegraf bridging configuration (telegraf.conf)},label={lst:telegraf-conf},basicstyle=\ttfamily\footnotesize,breaklines=true]{appendices/config/telegraf.conf}
 

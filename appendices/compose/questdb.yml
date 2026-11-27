@@ -5,10 +5,10 @@ services:
       QDB_PG_READONLY_USER_ENABLED: "true"
       QDB_PG_READONLY_USER: grafana
       QDB_PG_READONLY_PASSWORD: grafana
+      QDB_LINE_TCP_ENABLED: "false"
     ports:
       - "9000:9000"
       - "8812:8812"
-      - "9009:9009"
     volumes:
       - questdb-data:/var/lib/questdb
     healthcheck:
@@ -27,58 +27,6 @@ services:
     volumes:
       - ./init.sh:/init.sh:ro
       - ./schema:/schema:ro
-    entrypoint: ["/bin/sh", "/init.sh"]
-    networks:
-      - questdb-net
-
-  questdb-kafka-connect:
-    build:
-      context: ./kafka-connect
-      dockerfile: Dockerfile
-    image: spark-lakehouse-questdb-kafka-connect:0.23
-    depends_on:
-      redpanda:
-        condition: service_healthy
-      redpanda-init:
-        condition: service_completed_successfully
-      questdb-init:
-        condition: service_completed_successfully
-    environment:
-      CONNECT_BOOTSTRAP_SERVERS: ${KAFKA_BROKER:-redpanda:9092}
-      CONNECT_REST_ADVERTISED_HOST_NAME: questdb-kafka-connect
-      CONNECT_GROUP_ID: questdb-connect
-      CONNECT_CONFIG_STORAGE_TOPIC: _questdb_connect_configs
-      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
-      CONNECT_OFFSET_STORAGE_TOPIC: _questdb_connect_offsets
-      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
-      CONNECT_STATUS_STORAGE_TOPIC: _questdb_connect_status
-      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
-      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
-      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
-      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 1000
-      CONNECT_LOG4J_ROOT_LOGLEVEL: WARN
-    ports:
-      - "8083:8083"
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8083/connectors"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
-    networks:
-      - questdb-net
-      - redpanda-net
-
-  questdb-kafka-connect-init:
-    image: curlimages/curl:8.21.0
-    depends_on:
-      questdb-kafka-connect:
-        condition: service_healthy
-    volumes:
-      - ./kafka-connect/connectors:/connectors:ro
-      - ./kafka-connect/init.sh:/init.sh:ro
     entrypoint: ["/bin/sh", "/init.sh"]
     networks:
       - questdb-net

@@ -15,21 +15,5 @@ services:
     networks:
       - mqtt-net
 
-  telegraf:
-    image: telegraf:1.39-alpine
-    restart: unless-stopped
-    command: telegraf --config /etc/telegraf/conf/telegraf.conf
-    volumes:
-      - ./telegraf:/etc/telegraf/conf:ro
-    environment:
-      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
-      KAFKA_BROKER: ${KAFKA_BROKER:-redpanda:9092}
-    depends_on:
-      mosquitto:
-        condition: service_healthy
-    networks:
-      - mqtt-net
-      - redpanda-net
-
 volumes:
   mosquitto-data:
